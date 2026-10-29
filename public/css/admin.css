@@ -1,0 +1,179 @@
+@import url("/css/fonts.css");
+.fi-body {
+    background: #f7f7fb;
+    font-family: Montserrat, sans-serif;
+    color: #27243d;
+}
+.fi-body .fi-sidebar {
+    background: #fff;
+    border-inline-end: 1px solid #dedce8;
+}
+.fi-body .fi-topbar {
+    background: #fff;
+}
+.fi-body .fi-logo {
+    color: #3c3876;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+}
+.fi-body .fi-main {
+    max-width: 1280px;
+}
+.fi-body .fi-header-heading {
+    color: #3c3876;
+    font-weight: 600;
+    letter-spacing: -0.025em;
+}
+.fi-body .fi-section,
+.fi-body .fi-ta,
+.fi-body .fi-simple-main {
+    box-shadow: none;
+    border-color: #dedce8;
+    border-radius: 16px;
+}
+.fi-body .fi-input-wrp {
+    border-radius: 8px;
+}
+.fi-body .fi-btn {
+    border-radius: 8px;
+    min-height: 40px;
+}
+.fi-body :focus-visible {
+    outline-color: #ff7402;
+}
+.fi-body h1,
+.fi-body h2,
+.fi-body h3 {
+    color: #3c3876;
+}
+.fi-body .admin-intro {
+    padding: 8px 0 12px;
+}
+.fi-body .admin-eyebrow {
+    font-size: 13px;
+    font-weight: 600;
+    color: #963d00;
+    margin-bottom: 14px;
+}
+.fi-body .admin-title {
+    font-size: clamp(1.5rem, 3vw, 2rem);
+    font-weight: 600;
+    letter-spacing: -0.025em;
+    line-height: 1.4;
+    margin-bottom: 12px;
+}
+.fi-body .admin-intro > p:last-child {
+    font-size: 14px;
+    color: #666276;
+    line-height: 1.8;
+}
+.fi-body .admin-stat-label {
+    font-size: 12px;
+    color: #666276;
+    margin: 0;
+}
+.fi-body .admin-stat-value {
+    margin: 12px 0 0;
+    font-variant-numeric: tabular-nums;
+}
+.fi-body .admin-survey-row {
+    align-items: center;
+}
+.fi-body .admin-survey-row > div > p {
+    font-size: 12px !important;
+    color: #666276;
+}
+.fi-body .admin-survey-row h3 {
+    font-size: 15px;
+    line-height: 1.7;
+    margin-bottom: 0;
+}
+.fi-body .admin-survey-row a {
+    text-decoration: none;
+}
+.fi-body .admin-empty {
+    color: #666276;
+}
+.fi-body .admin-empty h3 {
+    margin-bottom: 10px;
+}
+.fi-body .fi-section-content p {
+    line-height: 1.8;
+}
+.fi-body .mikausis-report-comments li {
+    border-left: 0;
+    border-radius: 8px;
+}
+.fi-body .mikausis-report-empty {
+    border-left-width: 1px;
+}
+.fi-body .mikausis-report-eyebrow {
+    letter-spacing: 0;
+    text-transform: none;
+}
+.fi-body .mikausis-report-intro {
+    border-top-width: 1px;
+}
+.fi-body .mikausis-report h2,
+.fi-body .mikausis-report h3,
+.fi-body .mikausis-report h4 {
+    font-weight: 600;
+}
+.fi-body .mikausis-report-stats > div {
+    background: #eeedf7;
+}
+.fi-body .mikausis-report-option-value {
+    font-weight: 600;
+}
+.fi-body .mikausis-report-card {
+    border-color: #dedce8;
+}
+.fi-body .fi-simple-main {
+    border: 1px solid #dedce8;
+}
+.fi-body .fi-simple-header-heading {
+    font-size: 24px;
+}
+.fi-body .fi-fo-repeater-item-header {
+    background: #f7f7fb;
+}
+@media (max-width: 640px) {
+    .fi-body .admin-stats {
+        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    }
+    .fi-body .admin-title {
+        font-size: 24px;
+    }
+    .fi-body .admin-survey-row {
+        display: block !important;
+    }
+    .fi-body .admin-survey-row > .fi-btn {
+        margin-top: 14px;
+    }
+    .fi-body .admin-stats .fi-section-content {
+        padding: 18px;
+    }
+    .fi-body .admin-stat-label {
+        font-size: 11px;
+    }
+    .fi-body .admin-stat-value {
+        font-size: 26px !important;
+    }
+}
+@media print {
+    .fi-body {
+        background: #fff;
+    }
+    .fi-body .fi-main {
+        max-width: none;
+    }
+    .fi-body .mikausis-report {
+        font-size: 12px;
+    }
+    .fi-body .mikausis-report-option-label {
+        display: flex;
+    }
+    .fi-body .mikausis-report-track {
+        background: #eee !important;
+    }
+}

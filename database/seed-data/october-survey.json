@@ -1,0 +1,512 @@
+{
+  "title": "Aptauja vecākiem oktobrī",
+  "description": "Sveiki, vecāki!\n\nPēc vecāku sapulces sapratām, ka vajadzētu apkopot informāciju par mērķiem un projektiem, ko vēlamies virzīt. Vēlamies dzirdēt visu vecāku viedokli, tāpēc aptauja ir anonīma.",
+  "estimated_minutes": 7,
+  "sections": [
+    {
+      "key": "jaunumi-un-krekli",
+      "title": "Jaunumu vēstule un T krekli",
+      "description": ""
+    },
+    {
+      "key": "labdariba-un-atbalsts",
+      "title": "Labdarība un vecāku atbalsts",
+      "description": ""
+    },
+    {
+      "key": "kopigi-pasakumi",
+      "title": "Kopīgi pasākumi",
+      "description": ""
+    },
+    {
+      "key": "sazina",
+      "title": "Informācijas apmaiņa",
+      "description": ""
+    },
+    {
+      "key": "seminars",
+      "title": "Izglītojošs seminārs vecākiem",
+      "description": ""
+    }
+  ],
+  "questions": [
+    {
+      "key": "q1",
+      "section": "jaunumi-un-krekli",
+      "type": "single",
+      "title": "Vai vēlaties saņemt Mikauša “Jaunumu vēstuli”?",
+      "description": "Jaunumu vēstule – īss apraksts par Mikausī notiekošo un informācija par aktuālo.",
+      "required": false,
+      "options": [
+        {
+          "value": "yes_definitely",
+          "label": "Jā, noteikti"
+        },
+        {
+          "value": "yes_sometimes",
+          "label": "Jā, reizēm"
+        },
+        {
+          "value": "no",
+          "label": "Nē"
+        },
+        {
+          "value": "other",
+          "label": "Cits variants jeb brīvas formas jautājums"
+        }
+      ],
+      "allow_other": true,
+      "exclusive_values": [],
+      "condition": null
+    },
+    {
+      "key": "q2",
+      "section": "jaunumi-un-krekli",
+      "type": "single",
+      "title": "Viens no šī mācību gada mērķiem ir apdrukāt T kreklus bērniem un skolotājiem ar Mikauša logo. Krekli paliktu pie katra bērna un skolotāja. Kādas ir jūsu domas par šo ideju?",
+      "description": "",
+      "required": false,
+      "options": [
+        {
+          "value": "support",
+          "label": "Ļoti laba ideja, labprāt atbalstītu"
+        },
+        {
+          "value": "more_information",
+          "label": "Laba ideja, bet vēlētos uzzināt vairāk"
+        },
+        {
+          "value": "not_needed",
+          "label": "Ideja nav nepieciešama"
+        },
+        {
+          "value": "no_opinion",
+          "label": "Man nav viedokļa"
+        },
+        {
+          "value": "other",
+          "label": "Cits variants jeb brīvas formas jautājums"
+        }
+      ],
+      "allow_other": true,
+      "exclusive_values": [],
+      "condition": null
+    },
+    {
+      "key": "q3",
+      "section": "jaunumi-un-krekli",
+      "type": "single",
+      "title": "Kādu summu būtu gatavi maksāt par T kreklu + apdruku?",
+      "description": "",
+      "required": false,
+      "options": [
+        {
+          "value": "eur_5_8",
+          "label": "5–8 €"
+        },
+        {
+          "value": "eur_8_10",
+          "label": "8–10 €"
+        },
+        {
+          "value": "over_eur_10",
+          "label": "Vairāk par 10 €, ja krekls ir kvalitatīvāks"
+        },
+        {
+          "value": "not_interested",
+          "label": "Nevēlētos iegādāties"
+        },
+        {
+          "value": "other",
+          "label": "Cits variants jeb brīvas formas jautājums"
+        }
+      ],
+      "allow_other": true,
+      "exclusive_values": [],
+      "condition": null
+    },
+    {
+      "key": "q4",
+      "section": "labdariba-un-atbalsts",
+      "type": "multiple",
+      "title": "Vēl viens mērķis – šā gada Ziemassvētkos iedibināt Labdarības tirdziņu, kurā varētu piedalīties katra ģimene. Vai jūsu ģimene vēlētos piedalīties? Kādā veidā?",
+      "description": "",
+      "required": false,
+      "options": [
+        {
+          "value": "handmade_goods",
+          "label": "Jā, gatavotu un pārdotu pašu gatavotus izstrādājumus"
+        },
+        {
+          "value": "food",
+          "label": "Jā, gatavotu kādu ēdienu vai našķus"
+        },
+        {
+          "value": "donate_materials",
+          "label": "Jā, ziedotu lietas vai materiālus tirdziņam"
+        },
+        {
+          "value": "organize",
+          "label": "Jā, palīdzētu ar tirdziņa organizēšanu"
+        },
+        {
+          "value": "yes_other_way",
+          "label": "Jā, citā veidā"
+        },
+        {
+          "value": "no",
+          "label": "Nē, šoreiz nepiedalītos"
+        },
+        {
+          "value": "other",
+          "label": "Cits variants jeb brīvas formas jautājums"
+        }
+      ],
+      "allow_other": true,
+      "exclusive_values": [
+        "no"
+      ],
+      "condition": null
+    },
+    {
+      "key": "q5",
+      "section": "labdariba-un-atbalsts",
+      "type": "single",
+      "title": "Kāds, jūsuprāt, varētu būt labdarības mērķis?",
+      "description": "(Vēlams Ogrē vai Ogres novadā.)",
+      "required": false,
+      "options": [
+        {
+          "value": "ogre_children_hospital",
+          "label": "Ogres novada bērni, kuriem nepieciešams atbalsts Bērnu slimnīca"
+        },
+        {
+          "value": "ogre_care_home",
+          "label": "Ogres pansionāts"
+        },
+        {
+          "value": "ogre_low_income_families",
+          "label": "Ogres novada maznodrošinātās ģimenes"
+        },
+        {
+          "value": "ogre_disability_association",
+          "label": "Ogres invalīdu biedrība"
+        },
+        {
+          "value": "ogre_animal_shelter",
+          "label": "Ogres dzīvnieku patversme (Ogres Ķepas)"
+        },
+        {
+          "value": "other",
+          "label": "Cits variants"
+        },
+        {
+          "value": "no_opinion",
+          "label": "Man nav viedokļa"
+        }
+      ],
+      "allow_other": true,
+      "exclusive_values": [],
+      "condition": null
+    },
+    {
+      "key": "q6",
+      "section": "labdariba-un-atbalsts",
+      "type": "single",
+      "title": "Vai uzskatāt, ka vajadzētu veidot kopīgu bērnudārza vecāku fondu jeb izveidot kontu, kurā vecāki varētu pēc saviem ieskatiem nodrošināt līdzekļus Mikauša vajadzībām?",
+      "description": "",
+      "required": false,
+      "options": [
+        {
+          "value": "yes_definitely",
+          "label": "Jā, noteikti"
+        },
+        {
+          "value": "yes_clear_purpose",
+          "label": "Jā, ja būtu skaidri noteikts, kādiem mērķiem līdzekļi tiktu izmantoti"
+        },
+        {
+          "value": "maybe_more_information",
+          "label": "Varbūt, nepieciešams vairāk informācijas"
+        },
+        {
+          "value": "no",
+          "label": "Nē"
+        },
+        {
+          "value": "other",
+          "label": "Cits variants jeb brīvas formas jautājums"
+        }
+      ],
+      "allow_other": true,
+      "exclusive_values": [],
+      "condition": null
+    },
+    {
+      "key": "q7",
+      "section": "labdariba-un-atbalsts",
+      "type": "multiple",
+      "title": "Kur un kā jūs būtu gatavi iesaistīties bērnudārza pasākumos? Kas ir jūsu stiprās puses? Kā jūs varētu palīdzēt attīstīties bērnudārzam?",
+      "description": "",
+      "required": false,
+      "options": [
+        {
+          "value": "organizing",
+          "label": "Pasākumu organizēšanā"
+        },
+        {
+          "value": "hosting",
+          "label": "Pasākumu vadīšanā"
+        },
+        {
+          "value": "ideas",
+          "label": "Ideju ģenerēšanā"
+        },
+        {
+          "value": "practical_help",
+          "label": "Praktiskos darbos un palīdzībā pasākumu laikā"
+        },
+        {
+          "value": "creative_work",
+          "label": "Radošos darbos"
+        },
+        {
+          "value": "photo_video",
+          "label": "Fotografēšanā/video"
+        },
+        {
+          "value": "social_media_information",
+          "label": "Sociālo tīklu vai informācijas sagatavošanā"
+        },
+        {
+          "value": "maintenance_technical_work",
+          "label": "Saimnieciskos un tehniskos darbos"
+        },
+        {
+          "value": "professional_skills",
+          "label": "Varu palīdzēt ar savām profesionālajām zināšanām/prasmēm"
+        },
+        {
+          "value": "other",
+          "label": "Labprāt iesaistītos citā veidā"
+        },
+        {
+          "value": "no",
+          "label": "Šobrīd iesaistīties nevaru"
+        }
+      ],
+      "allow_other": true,
+      "exclusive_values": [
+        "no"
+      ],
+      "condition": null
+    },
+    {
+      "key": "q7_details",
+      "section": "labdariba-un-atbalsts",
+      "type": "text",
+      "title": "Ja vēlaties, lūdzu, īsi pastāstiet par savām stiprajām pusēm vai idejām, ar kurām varētu palīdzēt:",
+      "description": "",
+      "required": false,
+      "options": [],
+      "allow_other": false,
+      "exclusive_values": [],
+      "condition": null
+    },
+    {
+      "key": "q8",
+      "section": "kopigi-pasakumi",
+      "type": "single",
+      "title": "Vai atbalstāt un piedalīsieties pavasara talkā bērnudārza teritorijas sakārtošanai/labiekārtošanai?",
+      "description": "",
+      "required": false,
+      "options": [
+        {
+          "value": "yes",
+          "label": "Jā"
+        },
+        {
+          "value": "no",
+          "label": "Nē"
+        },
+        {
+          "value": "strongly_against",
+          "label": "Esmu kategoriski pret"
+        },
+        {
+          "value": "other",
+          "label": "Cits"
+        }
+      ],
+      "allow_other": true,
+      "exclusive_values": [],
+      "condition": null
+    },
+    {
+      "key": "q9",
+      "section": "kopigi-pasakumi",
+      "type": "single",
+      "title": "Vai vēlētos piedalīties kopīgā vecāku-bērnu-skolotāju pārgājienā pavasarī?",
+      "description": "",
+      "required": false,
+      "options": [
+        {
+          "value": "yes",
+          "label": "Jā"
+        },
+        {
+          "value": "no",
+          "label": "Nē"
+        },
+        {
+          "value": "strongly_against",
+          "label": "Esmu kategoriski pret"
+        },
+        {
+          "value": "other",
+          "label": "Cits"
+        }
+      ],
+      "allow_other": true,
+      "exclusive_values": [],
+      "condition": null
+    },
+    {
+      "key": "q10",
+      "section": "kopigi-pasakumi",
+      "type": "single",
+      "title": "Vai vēlaties, lai PPII “Mikausis” tiktu organizēti papildu pasākumi bērniem, uz kuriem tiktu piesaistīti dažādi mākslinieki/radošo darbnīcu vadītāji?",
+      "description": "",
+      "required": false,
+      "options": [
+        {
+          "value": "yes",
+          "label": "Jā"
+        },
+        {
+          "value": "no",
+          "label": "Nē"
+        },
+        {
+          "value": "depends_on_artist",
+          "label": "Ideja patīk, bet gala lēmumu pieņemtu, kad zinātu konkrētu mākslinieku vai radošo darbnīcu vadītāju"
+        },
+        {
+          "value": "only_free_internal_events",
+          "label": "Labāk izvēlēties tikai pašu organizētus pasākumus bez maksas"
+        }
+      ],
+      "allow_other": false,
+      "exclusive_values": [],
+      "condition": null
+    },
+    {
+      "key": "q11",
+      "section": "kopigi-pasakumi",
+      "type": "single",
+      "title": "Ja atbalstāt papildu pasākumu organizēšanu PPII “Mikausis”, kāda summa no bērna jūsu ģimenei būtu pieņemama?",
+      "description": "",
+      "required": false,
+      "options": [
+        {
+          "value": "up_to_eur_5",
+          "label": "Līdz 5 €"
+        },
+        {
+          "value": "eur_5_8",
+          "label": "5–8 €"
+        },
+        {
+          "value": "eur_8_10",
+          "label": "8–10 €"
+        }
+      ],
+      "allow_other": false,
+      "exclusive_values": [],
+      "condition": null
+    },
+    {
+      "key": "q12",
+      "section": "sazina",
+      "type": "single",
+      "title": "Vai informācijas apmaiņa starp skolotājiem un vecākiem ir apmierinoša?",
+      "description": "",
+      "required": false,
+      "options": [
+        {
+          "value": "yes",
+          "label": "Jā"
+        },
+        {
+          "value": "no",
+          "label": "Nē"
+        },
+        {
+          "value": "more",
+          "label": "Gribētos vairāk"
+        },
+        {
+          "value": "less",
+          "label": "Gribētos mazāk"
+        },
+        {
+          "value": "meet_more_often",
+          "label": "Vajadzētu biežāk sanākt visiem kopā"
+        }
+      ],
+      "allow_other": false,
+      "exclusive_values": [],
+      "condition": null
+    },
+    {
+      "key": "q13",
+      "section": "sazina",
+      "type": "text",
+      "title": "Ja izvēlējāties atbildi “Gribētos vairāk”, lūdzu, paskaidrojiet, kādas tieši informācijas vai atgriezeniskās saites jums šobrīd visvairāk trūkst?",
+      "description": "",
+      "required": false,
+      "options": [],
+      "allow_other": false,
+      "exclusive_values": [],
+      "condition": {
+        "question": "q12",
+        "values": [
+          "more"
+        ]
+      }
+    },
+    {
+      "key": "q14",
+      "section": "seminars",
+      "type": "single",
+      "title": "Vai vēlaties apmeklēt PPII “Mikausis” organizētu izglītojošu semināru vecākiem (bezmaksas)? Lūdzu, atzīmējiet sev aktuālāko tēmu.",
+      "description": "",
+      "required": false,
+      "options": [
+        {
+          "value": "boundaries_discipline",
+          "label": "Robežu nospraušana un disciplīna bez sodiem un kliegšanas."
+        },
+        {
+          "value": "confidence_security",
+          "label": "Kā veicināt bērna pašapziņu un drošības sajūtu."
+        },
+        {
+          "value": "healthy_eating",
+          "label": "Veselīgs uzturs un „izvēlīgie ēdāji”"
+        },
+        {
+          "value": "other",
+          "label": "Cits temats, lūdzu, norādiet"
+        },
+        {
+          "value": "no",
+          "label": "Nevēlos semināru apmeklēt"
+        }
+      ],
+      "allow_other": true,
+      "exclusive_values": [],
+      "condition": null
+    }
+  ]
+}
