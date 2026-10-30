@@ -8,6 +8,7 @@ use Filament\FontProviders\LocalFontProvider;
 use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\DisableBladeIconComponents;
 use Filament\Http\Middleware\DispatchServingFilamentEvent;
+use Filament\Navigation\NavigationItem;
 use Filament\Panel;
 use Filament\PanelProvider;
 use Filament\Support\Colors\Color;
@@ -39,6 +40,12 @@ class AdminPanelProvider extends PanelProvider
             ->darkMode(false)
             ->discoverResources(in: app_path('Filament/Resources'), for: 'App\\Filament\\Resources')
             ->pages([Dashboard::class])
+            ->navigationItems([
+                NavigationItem::make('Aptauju sākumlapa')
+                    ->icon('heroicon-o-arrow-top-right-on-square')
+                    ->url(fn (): string => route('surveys.index'), shouldOpenInNewTab: true)
+                    ->sort(100),
+            ])
             ->renderHook(PanelsRenderHook::HEAD_END, fn () => new HtmlString(
                 '<link rel="stylesheet" href="'.e(asset('css/admin.css')).'?v='.filemtime(public_path('css/admin.css')).'">'.
                 '<script src="'.e(asset('js/survey-share.js')).'?v='.filemtime(public_path('js/survey-share.js')).'" defer></script>'.
