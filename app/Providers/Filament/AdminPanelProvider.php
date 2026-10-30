@@ -40,7 +40,8 @@ class AdminPanelProvider extends PanelProvider
             ->discoverResources(in: app_path('Filament/Resources'), for: 'App\\Filament\\Resources')
             ->pages([Dashboard::class])
             ->renderHook(PanelsRenderHook::HEAD_END, fn () => new HtmlString(
-                '<link rel="stylesheet" href="'.e(asset('css/admin.css')).'">'.
+                '<link rel="stylesheet" href="'.e(asset('css/admin.css')).'?v='.filemtime(public_path('css/admin.css')).'">'.
+                '<script src="'.e(asset('js/survey-share.js')).'?v='.filemtime(public_path('js/survey-share.js')).'" defer></script>'.
                 '<link rel="stylesheet" href="'.e(asset('css/survey-editor.css')).'?v='.filemtime(public_path('css/survey-editor.css')).'">'
             ))
             ->middleware([

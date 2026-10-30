@@ -18,6 +18,8 @@ use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
+use Filament\Tables\Columns\Layout\Split;
+use Filament\Tables\Columns\Layout\Stack;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
@@ -80,24 +82,33 @@ class SurveyResource extends Resource
     public static function table(Table $table): Table
     {
         return $table->columns([
-            TextColumn::make('title')->label('Aptauja')->searchable()->sortable()->wrap()->description(fn (Survey $record): string => count($record->questions ?? []).' jautājumi'),
-            TextColumn::make('status')->label('Statuss')->badge()->formatStateUsing(fn (string $state): string => self::statusLabel($state))->color(fn (string $state): string => match ($state) {
-                'open' => 'success', 'closed' => 'gray', default => 'warning'
-            }),
-            TextColumn::make('responses_count')->label('Atbildes')->counts('responses')->sortable(),
-            TextColumn::make('invitations_count')->label('Ģimenes saites')->counts('invitations')->toggleable(),
-            TextColumn::make('closes_at')->label('Termiņš')->dateTime('d.m.Y. H:i')->placeholder('Bez termiņa')->sortable(),
+            Stack::make([
+                TextColumn::make('title')->label('Aptauja')->searchable()->sortable()->wrap()->weight('semibold')->description(fn (Survey $record): string => count($record->questions ?? []).' jautājumi'),
+                Split::make([
+                    TextColumn::make('status')->label('Statuss')->badge()->formatStateUsing(fn (string $state): string => self::statusLabel($state))->color(fn (string $state): string => match ($state) {
+                        'open' => 'success', 'closed' => 'gray', default => 'warning'
+                    }),
+                    TextColumn::make('responses_count')->label('Atbildes')->prefix('Atbildes: ')->counts('responses')->sortable(),
+                    TextColumn::make('invitations_count')->label('Ģimenes saites')->prefix('Ģimenes saites: ')->counts('invitations'),
+                    TextColumn::make('closes_at')->label('Termiņš')->dateTime('d.m.Y. H:i')->placeholder('Bez termiņa')->sortable(),
+                ])->extraAttributes(['class' => 'survey-card-details']),
+            ])->space(3),
         ])->defaultSort('created_at', 'desc')
+            ->contentGrid(['default' => 1])
+            ->extraAttributes(['class' => 'survey-directory-table'])
             ->filters([SelectFilter::make('status')->label('Statuss')->options(['draft' => 'Melnraksts', 'open' => 'Atvērta', 'closed' => 'Slēgta'])])
-            ->recordActions([EditAction::make()->label('Pārvaldīt'), ActionGroup::make(self::workflowActions())])
+            ->recordActions([
+                EditAction::make()->label('Pārvaldīt')->button(),
+                ...self::workflowActions(),
+            ])
             ->emptyStateHeading('Vēl nav aptauju')->emptyStateDescription('Izveidojiet pirmo aptauju, pievienojiet jautājumus un pēc satura pārbaudes publicējiet saiti vecākiem.')
             ->emptyStateIcon('heroicon-o-clipboard-document-list');
     }
 
     public static function workflowActions(): array
     {
-        return [
-            Action::make('publish')->label(fn (Survey $record): string => $record->published_at ? 'Atvērt atkārtoti' : 'Publicēt')
+        $actions = [
+            Action::make('publish')->label(fn (Survey $record): string => $record->published_at ? 'Publicēt vēlreiz' : 'Publicēt')
                 ->icon('heroicon-o-paper-airplane')->visible(fn (Survey $record): bool => $record->status !== 'open' && SchoolAccess::owns($record))
                 ->requiresConfirmation()->modalHeading('Atvērt aptauju vecākiem?')->modalDescription('Tiks saglabātas lapā veiktās izmaiņas un atvērta saite vecākiem. Aptauju varēsiet labot arī pēc publicēšanas; iepriekšējās atbildes saglabāsies.')
                 ->action(function (Survey $record, $livewire) {
@@ -116,21 +127,43 @@ class SurveyResource extends Resource
 
                     return redirect(self::getUrl('edit', ['record' => $record]));
                 }),
-            Action::make('close')->label('Slēgt aptauju')->icon('heroicon-o-lock-closed')->color('gray')->visible(fn (Survey $record): bool => $record->status === 'open' && SchoolAccess::owns($record))->requiresConfirmation()
+            Action::make('close')->label('Slēgt aptauju')->icon('heroicon-o-lock-closed')->color('gray')->outlined()->visible(fn (Survey $record): bool => $record->status === 'open' && SchoolAccess::owns($record))->requiresConfirmation()
                 ->action(function (Survey $record) {
                     SurveyWorkflow::close($record);
                     Notification::make()->title('Aptauja slēgta')->success()->send();
 
                     return redirect(self::getUrl('edit', ['record' => $record]));
                 }),
-            Action::make('duplicate')->label('Kopēt jaunai aptaujai')->icon('heroicon-o-document-duplicate')->visible(fn (Survey $record): bool => SchoolAccess::owns($record))
+            Action::make('unpublish')->label('Atcelt publicēšanu')->icon('heroicon-o-eye-slash')->color('danger')->outlined()
+                ->visible(fn (Survey $record): bool => $record->published_at !== null && $record->unpublished_at === null && SchoolAccess::owns($record))
+                ->requiresConfirmation()->modalHeading('Atcelt publicēšanu')->modalDescription('Aptauja vairs nebūs pieejama ar publisko saiti. Atbildes un kontakti tiks saglabāti.')
+                ->action(function (Survey $record) {
+                    SurveyWorkflow::unpublish($record);
+
+                    return redirect(self::getUrl('edit', ['record' => $record]));
+                }),
+            Action::make('duplicate')->label('Kopēt jaunai aptaujai')->icon('heroicon-o-document-duplicate')->color('gray')->outlined()->visible(fn (Survey $record): bool => SchoolAccess::owns($record))
                 ->action(function (Survey $record) {
                     $copy = SurveyWorkflow::duplicate($record);
 
                     return redirect(self::getUrl('edit', ['record' => $copy]));
                 }),
-            Action::make('public')->label('Atvērt vecāku saiti')->icon('heroicon-o-arrow-top-right-on-square')->visible(fn (Survey $record): bool => (bool) $record->published_at && SchoolAccess::owns($record))->url(fn (Survey $record): string => route('surveys.show', ['slug' => $record->slug]))->openUrlInNewTab(),
-            Action::make('report')->label('Rezultātu pārskats')->icon('heroicon-o-chart-bar')->visible(fn (Survey $record): bool => SchoolAccess::owns($record))->url(fn (Survey $record): string => self::getUrl('report', ['record' => $record])),
+            Action::make('public')->label('Atvērt aptauju')->icon('heroicon-o-arrow-top-right-on-square')->color('gray')->outlined()->button()->visible(fn (Survey $record): bool => (bool) $record->published_at && $record->unpublished_at === null && SchoolAccess::owns($record))->url(fn (Survey $record): string => route('surveys.show', ['slug' => $record->slug]))->openUrlInNewTab(),
+            Action::make('share')->label('Dalīties')->icon('heroicon-o-share')->color('gray')->outlined()->button()
+                ->visible(fn (Survey $record): bool => (bool) $record->published_at && $record->unpublished_at === null && SchoolAccess::owns($record))
+                ->alpineClickHandler('window.MikausisSurveyShare.share($el)')
+                ->extraAttributes(fn (Survey $record): array => ['data-survey-share' => '', 'data-share-url' => route('surveys.show', ['slug' => $record->slug]), 'data-share-title' => $record->title, 'data-share-copy' => 'Kopēt saiti', 'data-share-success' => 'Saite nokopēta']),
+            Action::make('report')->label('Rezultātu pārskats')->icon('heroicon-o-chart-bar')->color('gray')->outlined()->visible(fn (Survey $record): bool => SchoolAccess::owns($record))->url(fn (Survey $record): string => self::getUrl('report', ['record' => $record])),
+        ];
+
+        $actions = collect($actions)->keyBy(fn (Action $action): string => $action->getName());
+
+        return [
+            $actions['publish'],
+            $actions['public'],
+            $actions['share'],
+            ActionGroup::make([$actions['report'], $actions['close'], $actions['unpublish'], $actions['duplicate']])
+                ->label('Vairāk')->button()->outlined()->color('gray')->icon('heroicon-o-ellipsis-horizontal'),
         ];
     }
 

@@ -296,6 +296,7 @@ final class SurveyWorkflow
                 }
             }
             $current->status = 'open';
+            $current->unpublished_at = null;
             $current->published_at ??= now();
             $current->save();
 
@@ -311,6 +312,20 @@ final class SurveyWorkflow
         $current->save();
 
         return $current;
+    }
+
+    public static function unpublish(Survey $survey): Survey
+    {
+        return DB::transaction(function () use ($survey) {
+            $current = Survey::query()->lockForUpdate()->findOrFail($survey->getKey());
+            SchoolAccess::authorize($current);
+            abort_unless($current->published_at !== null, 422);
+            $current->status = 'closed';
+            $current->unpublished_at ??= now();
+            $current->save();
+
+            return $current;
+        });
     }
 
     public static function duplicate(Survey $survey): Survey

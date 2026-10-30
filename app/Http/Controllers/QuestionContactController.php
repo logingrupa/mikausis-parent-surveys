@@ -65,8 +65,8 @@ class QuestionContactController extends Controller
 
     private function resolve(string $slug, string $questionKey): array
     {
-        $survey = Survey::query()->where('slug', $slug)->whereIn('status', ['open', 'closed'])
-            ->whereNotNull('published_at')->where('allow_identified_responses', false)->firstOrFail();
+        $survey = Survey::query()->publiclyVisible()->where('slug', $slug)
+            ->where('allow_identified_responses', false)->firstOrFail();
         $question = $survey->questionDefinition($questionKey, includeArchived: true);
         abort_unless(is_array($question) && in_array($question['type'] ?? null, ['single', 'multiple'], true) && is_array($question['contact'] ?? null), 404);
 

@@ -18,6 +18,21 @@ class EditSurvey extends EditRecord
 
     protected static ?string $title = 'Pārvaldīt aptauju';
 
+    public function getHeading(): string
+    {
+        return $this->getRecord()->title;
+    }
+
+    public function getSubheading(): string
+    {
+        return SurveyResource::statusLabel($this->getRecord()->status).' · '.count($this->getRecord()->questions ?? []).' jautājumi';
+    }
+
+    public function getExtraBodyAttributes(): array
+    {
+        return ['class' => 'survey-management-page'];
+    }
+
     protected function mutateFormDataBeforeFill(array $data): array
     {
         return SurveyEditorData::fromDefinition($data);

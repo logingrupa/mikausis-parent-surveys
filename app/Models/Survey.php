@@ -17,7 +17,7 @@ class Survey extends Model
 
     protected function casts(): array
     {
-        return ['sections' => 'array', 'questions' => 'array', 'archived_questions' => 'array', 'closes_at' => 'immutable_datetime', 'published_at' => 'immutable_datetime', 'estimated_minutes' => 'integer', 'allow_identified_responses' => 'boolean', 'respondent_fields' => 'array'];
+        return ['sections' => 'array', 'questions' => 'array', 'archived_questions' => 'array', 'closes_at' => 'immutable_datetime', 'published_at' => 'immutable_datetime', 'unpublished_at' => 'immutable_datetime', 'estimated_minutes' => 'integer', 'allow_identified_responses' => 'boolean', 'respondent_fields' => 'array'];
     }
 
     protected static function booted(): void
@@ -267,6 +267,11 @@ class Survey extends Model
         return $query->where('school_id', $school instanceof School ? $school->getKey() : $school);
     }
 
+    public function scopePubliclyVisible(Builder $query): Builder
+    {
+        return $query->whereIn('status', ['open', 'closed'])->whereNotNull('published_at')->whereNull('unpublished_at');
+    }
+
     public function scopeAccessibleTo(Builder $query, User $user): Builder
     {
         return $query->forSchool($user->school_id ?? 0);
@@ -274,7 +279,7 @@ class Survey extends Model
 
     public function isAcceptingResponses(): bool
     {
-        return $this->status === 'open' && ($this->closes_at === null || $this->closes_at->isFuture());
+        return $this->unpublished_at === null && $this->status === 'open' && ($this->closes_at === null || $this->closes_at->isFuture());
     }
 
     public function respondentFields(): array

@@ -21,7 +21,7 @@ class SurveyController extends Controller
     public function index(): View
     {
         $surveys = Survey::query()->whereHas('school', fn ($query) => $query->where('slug', 'mikausis'))
-            ->where('status', 'open')->whereNotNull('published_at')
+            ->publiclyVisible()->where('status', 'open')
             ->where(fn ($query) => $query->whereNull('closes_at')->orWhere('closes_at', '>', now()))
             ->latest('published_at')->get();
 
@@ -180,7 +180,7 @@ class SurveyController extends Controller
 
     private function publicSurvey(string $slug): Survey
     {
-        return Survey::query()->where('slug', $slug)->whereIn('status', ['open', 'closed'])->whereNotNull('published_at')->firstOrFail();
+        return Survey::query()->publiclyVisible()->where('slug', $slug)->firstOrFail();
     }
 
     private function invitation(Survey $survey, ?string $token): ?FamilyInvitation
