@@ -119,19 +119,55 @@
     font-variant-numeric: tabular-nums;
 }
 .fi-body .admin-survey-row {
+    display: flex;
+    flex-wrap: wrap;
     align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 20px 0;
+    border-top: 1px solid #dedce8;
 }
-.fi-body .admin-survey-row > div > p {
-    font-size: 12px !important;
+.fi-body .admin-survey-details {
+    flex: 1 1 260px;
+    min-width: 0;
+}
+.fi-body .admin-survey-details > p {
+    margin: 4px 0 0;
+    font-size: 13px;
     color: #666276;
 }
 .fi-body .admin-survey-row h3 {
-    font-size: 15px;
-    line-height: 1.7;
+    font-size: 17px;
+    font-weight: 600;
+    line-height: 1.5;
     margin-bottom: 0;
 }
-.fi-body .admin-survey-row a {
-    text-decoration: none;
+.fi-body .admin-survey-row h3 a {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 44px;
+    color: #3c3876;
+    text-decoration: underline;
+    text-underline-offset: 4px;
+    overflow-wrap: anywhere;
+}
+.fi-body .admin-survey-row h3 a:hover {
+    color: #27243d;
+    text-decoration-thickness: 2px;
+}
+.fi-body .admin-survey-title-icon {
+    width: 18px;
+    height: 18px;
+    flex-shrink: 0;
+}
+.fi-body .admin-survey-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+.fi-body .admin-survey-actions .fi-btn {
+    min-height: 44px;
 }
 .fi-body .admin-empty {
     color: #666276;
@@ -218,10 +254,16 @@
         font-size: 24px;
     }
     .fi-body .admin-survey-row {
-        display: block !important;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr);
     }
-    .fi-body .admin-survey-row > .fi-btn {
-        margin-top: 14px;
+    .fi-body .admin-survey-actions {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    .fi-body .admin-survey-actions .fi-btn {
+        padding-inline: 8px;
+        white-space: normal;
     }
     .fi-body .admin-stats .fi-section-content {
         padding: 18px;

@@ -20,12 +20,16 @@
             <x-filament::button tag="a" color="gray" :href="\App\Filament\Resources\Surveys\SurveyResource::getUrl('index')">Visas aptaujas</x-filament::button>
         </div>
         @forelse ($surveys as $survey)
-            <article class="admin-survey-row" style="padding:1rem 0;border-top:1px solid #e8e7ef;display:flex;justify-content:space-between;gap:1rem;flex-wrap:wrap">
-                <div>
-                    <h3 style="font-weight:600"><a href="{{ \App\Filament\Resources\Surveys\SurveyResource::getUrl('edit', ['record' => $survey]) }}">{{ $survey->title }}</a></h3>
-                    <p style="font-size:.875rem;margin-top:.4rem">{{ \App\Filament\Resources\Surveys\SurveyResource::statusLabel($survey->status) }} · {{ $survey->responses_count }} atbildes · {{ count($survey->questions ?? []) }} jautājumi</p>
+            @php($surveyEditUrl = \App\Filament\Resources\Surveys\SurveyResource::getUrl('edit', ['record' => $survey]))
+            <article class="admin-survey-row">
+                <div class="admin-survey-details">
+                    <h3><a href="{{ $surveyEditUrl }}">{{ $survey->title }}<x-filament::icon icon="heroicon-o-chevron-right" class="admin-survey-title-icon" /></a></h3>
+                    <p>{{ \App\Filament\Resources\Surveys\SurveyResource::statusLabel($survey->status) }} · {{ $survey->responses_count }} atbildes · {{ count($survey->questions ?? []) }} jautājumi</p>
                 </div>
-                <x-filament::button tag="a" color="gray" size="sm" :href="\App\Filament\Resources\Surveys\SurveyResource::getUrl('report', ['record' => $survey])">Skatīt rezultātus</x-filament::button>
+                <div class="admin-survey-actions">
+                    <x-filament::button tag="a" :href="$surveyEditUrl" icon="heroicon-o-pencil-square">Pārvaldīt</x-filament::button>
+                    <x-filament::button tag="a" color="gray" :href="\App\Filament\Resources\Surveys\SurveyResource::getUrl('report', ['record' => $survey])">Skatīt rezultātus</x-filament::button>
+                </div>
             </article>
         @empty
             <div class="admin-empty" style="padding:2rem 0">
