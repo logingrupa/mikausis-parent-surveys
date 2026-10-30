@@ -69,11 +69,16 @@
 .fi-body .survey-directory-table .fi-ta-record .fi-ta-actions {
     flex-wrap: wrap;
     justify-content: flex-start;
-    gap: 8px 16px;
+    gap: 8px;
 }
-.fi-body .survey-directory-table .fi-ta-record .fi-ta-actions > a,
-.fi-body .survey-directory-table .fi-ta-record .fi-ta-actions > button {
+.fi-body .survey-directory-table .fi-ta-record .fi-ta-actions .fi-btn {
     min-height: 44px;
+    padding-inline: 12px;
+    gap: 6px;
+}
+.fi-body .survey-directory-table .fi-ta-record .fi-ta-actions .fi-btn > .fi-icon {
+    width: 16px;
+    height: 16px;
 }
 .fi-body .survey-share-status {
     color: #27634b;
@@ -219,7 +224,6 @@
     .fi-body .survey-directory-table .fi-ta-record .fi-ta-actions {
         display: grid;
         grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 8px;
         width: 100%;
     }
     .fi-body .survey-directory-table .fi-ta-record .fi-ta-actions > .fi-dropdown,
