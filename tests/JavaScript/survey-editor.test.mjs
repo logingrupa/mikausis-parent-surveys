@@ -1277,35 +1277,64 @@ test("adding selects the new contact label, removal selects its neighbour, and t
     assert.equal(instance.selectedContactFields.contact, selected);
 });
 
-test("contact type edits preserve identity and labels, reject unsupported types and clear only the changed preview answer", () => {
+test("custom contact type edits preserve identity and labels and clear only the changed preview answer", () => {
     const item = question("contact", "first");
     const instance = editor([item]);
     instance.addContactBlock(item);
+    instance.addContactField(item, "custom");
+    const custom = item.contact.fields.at(-1);
+    const key = custom.key;
     instance.answerPreview(item, "yes", true);
     instance.setPreviewContactOptIn(item, true);
-    instance.setPreviewContactValue(item, "name", "Pārbaudes vārds");
+    instance.setPreviewContactValue(item, key, "Test value");
     instance.setPreviewContactValue(item, "email", "test@example.test");
-    instance.updateContactField(item, "name", "type", "text");
-    assert.equal(instance.previewContactValue(item, "name"), "Pārbaudes vārds");
+    instance.updateContactField(item, key, "type", "text");
+    assert.equal(instance.previewContactValue(item, key), "Test value");
     for (const type of ["email", "tel", "role", "text"]) {
-        instance.updateContactField(item, "name", "type", type);
-        assert.deepEqual(item.contact.fields[0], {
-            key: "name",
-            label: "Vārds un uzvārds",
+        instance.updateContactField(item, key, "type", type);
+        assert.deepEqual(custom, {
+            key,
+            label: "Papildu informācija",
             type,
-            required: true,
+            required: false,
         });
-        assert.equal(instance.previewContactValue(item, "name"), "");
+        assert.equal(instance.previewContactValue(item, key), "");
         assert.equal(
             instance.previewContactValue(item, "email"),
             "test@example.test",
         );
-        instance.setPreviewContactValue(item, "name", "Test value");
+        instance.setPreviewContactValue(item, key, "Test value");
     }
     for (const invalid of ["file", "number", "", null])
-        instance.updateContactField(item, "name", "type", invalid);
-    assert.equal(item.contact.fields[0].type, "text");
-    assert.equal(instance.previewContactValue(item, "name"), "Test value");
+        instance.updateContactField(item, key, "type", invalid);
+    assert.equal(custom.type, "text");
+    assert.equal(instance.previewContactValue(item, key), "Test value");
+});
+
+test("built-in contact fields keep their semantic type while legacy definitions remain untouched", () => {
+    const item = question("contact", "first");
+    const instance = editor([item]);
+    instance.addContactBlock(item);
+    instance.addContactField(item, "phone");
+    instance.addContactField(item, "role");
+    for (const field of item.contact.fields) {
+        const original = structuredClone(field);
+        assert.equal(instance.canChangeContactFieldType(field), false);
+        for (const type of ["text", "email", "tel", "role"])
+            instance.updateContactField(item, field.key, "type", type);
+        assert.deepEqual(field, original);
+    }
+    item.contact.fields[1].type = "text";
+    const original = structuredClone(item.contact);
+    assert.equal(instance.contactFieldType(item.contact.fields[1]), "email");
+    instance.answerPreview(item, "yes", true);
+    instance.setSharedPreviewConsent(true);
+    assert.equal(
+        instance.previewShared.fields.find((field) => field.label === "E-pasts")
+            .type,
+        "email",
+    );
+    assert.deepEqual(item.contact, original);
 });
 
 test("contact validation reveals and focuses the selected field or relevant block settings", (context) => {

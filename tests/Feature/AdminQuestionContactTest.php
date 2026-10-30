@@ -4,11 +4,13 @@ namespace Tests\Feature;
 
 use App\Filament\Resources\Surveys\Pages\QuestionContacts;
 use App\Filament\Resources\Surveys\SurveyResource;
+use App\Models\QuestionAnswer;
 use App\Models\QuestionContact;
 use App\Models\School;
 use App\Models\Survey;
 use App\Models\SurveyResponse;
 use App\Models\User;
+use App\Services\QuestionContactReportService;
 use Filament\Actions\Action;
 use Filament\Facades\Filament;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
@@ -90,7 +92,7 @@ class AdminQuestionContactTest extends TestCase
 
         $this->get($this->contactsUrl($survey))->assertOk()
             ->assertSee('Brīvprātīgie kontakti')
-            ->assertSee('Atsevišķi, brīvprātīgi atstāta kontaktinformācija')
+            ->assertSee('Šeit redzami tikai atstātie kontakti un aktivitātes, par kurām sazināties. Pārējās aptaujas atbildes paliek anonīmas.')
             ->assertSee('mazāk nekā piecas anketas')
             ->assertSee('Pavasara talka')
             ->assertSee('Palīdzēšu dārzā')
@@ -146,15 +148,14 @@ class AdminQuestionContactTest extends TestCase
         }
 
         Livewire::test(QuestionContacts::class, ['record' => $survey->id])
-            ->assertViewHas('groups', function (array $groups): bool {
-                $entry = $groups[0]['entries'][0];
-
-                return array_keys($entry) === ['id', 'answers', 'fields']
-                    && array_keys($entry['fields'][0]) === ['label', 'value'];
+            ->assertViewHas('contacts', function (array $contacts): bool {
+                return array_keys($contacts[0]) === ['title', 'label', 'fields', 'activities']
+                    && array_keys($contacts[0]['fields'][0]) === ['label', 'value']
+                    && array_keys($contacts[0]['activities'][0]) === ['id', 'title', 'purpose', 'archived', 'answers'];
             });
     }
 
-    public function test_contacts_remain_in_separate_question_groups_without_visible_ids(): void
+    public function test_different_contact_details_remain_separate_without_visible_ids(): void
     {
         $school = $this->school();
         $survey = $this->survey($school);
@@ -163,10 +164,12 @@ class AdminQuestionContactTest extends TestCase
         $this->actingAs($this->user($school));
 
         Livewire::test(QuestionContacts::class, ['record' => $survey->id])
-            ->assertViewHas('groups', function (array $groups): bool {
-                return array_column($groups, 'title') === ['Pavasara talka', 'Pavasara koncerts']
-                    && $groups[0]['entries'][0]['fields'][0]['value'] === 'TALKAS-KONTAKTS'
-                    && $groups[1]['entries'][0]['fields'][0]['value'] === 'KONCERTA-KONTAKTS';
+            ->assertViewHas('contacts', function (array $contacts): bool {
+                $byTitle = collect($contacts)->keyBy('title');
+
+                return count($contacts) === 2
+                    && $byTitle['TALKAS-KONTAKTS']['activities'][0]['title'] === 'Pavasara talka'
+                    && $byTitle['KONCERTA-KONTAKTS']['activities'][0]['title'] === 'Pavasara koncerts';
             });
 
         $html = $this->get($this->contactsUrl($survey))->assertOk()->getContent();
@@ -174,6 +177,124 @@ class AdminQuestionContactTest extends TestCase
         $this->assertDoesNotMatchRegularExpression('/[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}/i', $visible);
         $this->assertStringNotContainsString('created_at', $visible);
         $this->assertStringNotContainsString('submitted_at', $visible);
+    }
+
+    public function test_identical_contacts_share_one_card_with_active_and_archived_activities_without_writes_or_answer_queries(): void
+    {
+        $school = $this->school();
+        $survey = $this->survey($school);
+        $old = $this->contact($survey);
+        $questions = $survey->questions;
+        $questions[0]['type'] = 'single';
+        $survey->update(['questions' => $questions]);
+        $current = $this->contact($survey, question: $survey->questions[0]['key']);
+        $concert = $this->contact($survey, question: 'concert');
+        $concert->update(['details' => ['fields' => array_reverse($concert->details['fields'])]]);
+        $before = QuestionContact::query()->get()->mapWithKeys(fn (QuestionContact $contact) => [
+            $contact->id => [$contact->getRawOriginal('answer'), $contact->getRawOriginal('details')],
+        ])->all();
+
+        $connection = $survey->getConnection();
+        $connection->enableQueryLog();
+        $connection->flushQueryLog();
+        $cards = app(QuestionContactReportService::class)->build($survey);
+        $queries = $connection->getQueryLog();
+        $connection->disableQueryLog();
+
+        $this->assertCount(1, $cards);
+        $this->assertSame('Anna Liepa', $cards[0]['title']);
+        $this->assertCount(3, $cards[0]['activities']);
+        $this->assertEqualsCanonicalizing([$old->id, $current->id, $concert->id], array_column($cards[0]['activities'], 'id'));
+        $this->assertCount(1, array_filter($cards[0]['activities'], fn (array $activity) => $activity['archived']));
+        foreach ($queries as $query) {
+            $this->assertStringStartsWith('select ', strtolower($query['query']));
+            $this->assertStringNotContainsString('question_answers', $query['query']);
+            $this->assertStringNotContainsString('survey_responses', $query['query']);
+        }
+        $this->assertSame($before, QuestionContact::query()->get()->mapWithKeys(fn (QuestionContact $contact) => [
+            $contact->id => [$contact->getRawOriginal('answer'), $contact->getRawOriginal('details')],
+        ])->all());
+        $this->actingAs($this->user($school));
+        $html = $this->get($this->contactsUrl($survey))->assertOk()->getContent();
+        $this->assertSame(1, substr_count($html, 'data-contact-card'));
+        $this->assertSame(3, substr_count($html, 'data-contact-activity'));
+        $this->assertSame(1, substr_count($html, '>Anna Liepa</h3>'));
+        $this->assertSame(1, substr_count($html, '>anna@example.test</dd>'));
+        $this->assertStringContainsString('Iepriekšējā jautājuma versija', $html);
+    }
+
+    #[DataProvider('differentContactFields')]
+    public function test_same_name_does_not_merge_conflicting_or_extra_contact_fields(string $key, string $value): void
+    {
+        $survey = $this->survey($this->school());
+        $this->contact($survey);
+        $second = $this->contact($survey, question: 'concert');
+        $fields = collect($second->details['fields'])->keyBy('key')->all();
+        $fields[$key] = ['key' => $key, 'value' => $value];
+        $second->update(['details' => ['fields' => array_values($fields)]]);
+
+        $this->assertCount(2, app(QuestionContactReportService::class)->build($survey));
+    }
+
+    public static function differentContactFields(): array
+    {
+        return [['email', 'another@example.test'], ['role', 'mother'], [self::CUSTOM_KEY, 'Pēcpusdienā']];
+    }
+
+    #[DataProvider('unreliableContactFields')]
+    public function test_name_only_and_invalid_recipient_records_are_never_merged(?string $email): void
+    {
+        $survey = $this->survey($this->school());
+        foreach (['talka', 'concert'] as $key) {
+            $contact = $this->contact($survey, question: $key);
+            $fields = [['key' => 'name', 'value' => 'Anna Liepa']];
+            if ($email !== null) {
+                $fields[] = ['key' => 'email', 'value' => $email];
+            }
+            $contact->update(['details' => ['fields' => $fields]]);
+        }
+
+        $this->assertCount(2, app(QuestionContactReportService::class)->build($survey));
+    }
+
+    public static function unreliableContactFields(): array
+    {
+        return [[null], ['not-an-email']];
+    }
+
+    public function test_matching_valid_phone_only_contacts_are_grouped(): void
+    {
+        $questions = $this->questions();
+        foreach ([0, 1] as $index) {
+            $questions[$index]['contact']['fields'] = [
+                ['key' => 'phone', 'label' => 'Tālrunis', 'type' => 'tel', 'required' => true],
+            ];
+        }
+        $survey = $this->survey($this->school(), ['questions' => $questions]);
+        foreach (['talka', 'concert'] as $key) {
+            $this->contact($survey, question: $key)->update(['details' => ['fields' => [
+                ['key' => 'phone', 'value' => '+371 20000000'],
+            ]]]);
+        }
+
+        $cards = app(QuestionContactReportService::class)->build($survey);
+        $this->assertCount(1, $cards);
+        $this->assertSame('+371 20000000', $cards[0]['title']);
+        $this->assertSame('Tālrunis', $cards[0]['label']);
+        $this->assertCount(2, $cards[0]['activities']);
+    }
+
+    public function test_nontrigger_answers_do_not_appear_as_missing_contacts_or_missing_answers(): void
+    {
+        $school = $this->school();
+        $survey = $this->survey($school);
+        QuestionAnswer::create(['survey_id' => $survey->id, 'question_key' => 'talka', 'answer' => ['values' => ['books']]]);
+        $this->actingAs($this->user($school));
+
+        $this->get($this->contactsUrl($survey))->assertOk()->assertSee('Brīvprātīgie kontakti: 0')
+            ->assertDontSee('Pavasara talka')->assertDontSee('Pavasara koncerts')->assertDontSee('Sakārtošu grāmatas');
+        $this->assertCount(0, app(QuestionContactReportService::class)->build($survey));
+        $this->assertDatabaseCount('question_answers', 1);
     }
 
     public function test_contact_content_and_question_configuration_are_html_escaped(): void

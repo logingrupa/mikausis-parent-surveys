@@ -2,274 +2,25 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import vm from "node:vm";
+import {
+    cacheKey,
+    contactId,
+    definitionHash,
+    memoryStorage,
+} from "./helpers/contact-followup.mjs";
 
-const sources = ["shared-question-contacts.js", "survey.js"].map((name) => [
+const sources = [
+    "survey-session.js",
+    "survey-draft-state.js",
+    "shared-question-contacts.js",
+    "contact-followup-state.js",
+    "contact-collector.js",
+    "survey.js",
+].map((name) => [
     name,
     readFileSync(new URL("../../public/js/" + name, import.meta.url), "utf8"),
 ]);
-const camel = (name) =>
-    name.replace(/-([a-z])/g, (_, letter) => letter.toUpperCase());
-
-// Only the DOM operations used by the runtime are implemented. Queries traverse
-// the actual fixture tree, and events bubble through that tree to the form.
-function matchesSimple(node, selector) {
-    const conditions = [];
-    selector = selector
-        .replace(/:not\(:disabled\)/g, () => {
-            conditions.push(!node.disabled);
-            return "";
-        })
-        .replace(/:(checked|disabled)/g, (_, property) => {
-            conditions.push(Boolean(node[property]));
-            return "";
-        })
-        .replace(
-            /\[([\w-]+)(?:([\^$*]?=)(?:"([^"]*)"|'([^']*)'|([^\]]*)))?\]/g,
-            (_, name, operator, double, single, bare) => {
-                const actual = node.getAttribute(name);
-                const expected = double ?? single ?? bare;
-                conditions.push(
-                    operator === "="
-                        ? actual === expected
-                        : operator === "$="
-                          ? actual?.endsWith(expected) === true
-                          : operator === "^="
-                            ? actual?.startsWith(expected) === true
-                            : operator === "*="
-                              ? actual?.includes(expected) === true
-                              : actual !== null,
-                );
-                return "";
-            },
-        );
-    selector = selector
-        .replace(/#([\w-]+)/g, (_, id) => {
-            conditions.push(node.id === id);
-            return "";
-        })
-        .replace(/\.([\w-]+)/g, (_, name) => {
-            conditions.push(node.className.split(/\s+/).includes(name));
-            return "";
-        });
-    return (
-        conditions.every(Boolean) &&
-        (!selector ||
-            selector === "*" ||
-            node.tagName === selector.toUpperCase())
-    );
-}
-
-function matches(node, selector) {
-    return selector.split(",").some((part) => {
-        const chain = part.trim().split(/\s+(?![^\[]*\])/);
-        if (!matchesSimple(node, chain.pop())) return false;
-        let ancestor = node.parentElement;
-        while (chain.length) {
-            const target = chain.pop();
-            while (ancestor && !matchesSimple(ancestor, target))
-                ancestor = ancestor.parentElement;
-            if (!ancestor) return false;
-            ancestor = ancestor.parentElement;
-        }
-        return true;
-    });
-}
-
-class Element {
-    constructor(tag, document) {
-        this.tagName = tag.toUpperCase();
-        this.ownerDocument = document;
-        this.children = [];
-        this.parentElement = null;
-        this.dataset = {};
-        this.attributes = new Map();
-        this.listeners = new Map();
-        this.style = {};
-        this.hidden = this.disabled = this.required = this.checked = false;
-        this.value = "";
-        this.maxLength = -1;
-        this._text = "";
-        this.htmlWrites = [];
-        this.classList = {
-            add: (name) => this.classList.toggle(name, true),
-            toggle: (name, force) => {
-                const names = new Set(
-                    this.className.split(/\s+/).filter(Boolean),
-                );
-                const add = force ?? !names.has(name);
-                if (add) names.add(name);
-                else names.delete(name);
-                this.className = [...names].join(" ");
-                return add;
-            },
-        };
-    }
-    get textContent() {
-        return (
-            this._text +
-            this.children.map((child) => child.textContent).join("")
-        );
-    }
-    set textContent(value) {
-        this.replaceChildren();
-        this._text = String(value);
-    }
-    set innerHTML(value) {
-        this.htmlWrites.push(value);
-        this.textContent = value;
-    }
-    get selectedOptions() {
-        return this.children.filter((option) => option.value === this.value);
-    }
-    getAttribute(name) {
-        if (name.startsWith("data-"))
-            return this.dataset[camel(name.slice(5))] ?? null;
-        return this.attributes.get(name) ?? null;
-    }
-    setAttribute(name, value) {
-        if (name.startsWith("data-"))
-            this.dataset[camel(name.slice(5))] = String(value);
-        else this.attributes.set(name, String(value));
-    }
-    hasAttribute(name) {
-        return this.getAttribute(name) !== null;
-    }
-    removeAttribute(name) {
-        if (name.startsWith("data-")) delete this.dataset[camel(name.slice(5))];
-        else this.attributes.delete(name);
-    }
-    append(...nodes) {
-        for (const node of nodes) {
-            node.remove();
-            node.parentElement = this;
-            this.children.push(node);
-        }
-    }
-    replaceChildren(...nodes) {
-        for (const child of this.children) child.parentElement = null;
-        this.children = [];
-        this._text = "";
-        this.append(...nodes);
-    }
-    remove() {
-        if (this.parentElement) {
-            const siblings = this.parentElement.children;
-            siblings.splice(siblings.indexOf(this), 1);
-            this.parentElement = null;
-        }
-    }
-    querySelectorAll(selector) {
-        const result = [];
-        const visit = (node) => {
-            for (const child of node.children) {
-                if (matches(child, selector)) result.push(child);
-                visit(child);
-            }
-        };
-        visit(this);
-        return result;
-    }
-    querySelector(selector) {
-        return this.querySelectorAll(selector)[0] ?? null;
-    }
-    closest(selector) {
-        for (let node = this; node; node = node.parentElement)
-            if (matches(node, selector)) return node;
-        return null;
-    }
-    addEventListener(type, listener) {
-        if (!this.listeners.has(type)) this.listeners.set(type, []);
-        this.listeners.get(type).push(listener);
-    }
-    dispatch(type, extra = {}) {
-        const event = {
-            type,
-            target: this,
-            defaultPrevented: false,
-            preventDefault() {
-                this.defaultPrevented = true;
-            },
-            ...extra,
-        };
-        const results = [];
-        for (let node = this; node; node = node.parentElement) {
-            for (const listener of node.listeners.get(type) || [])
-                results.push(listener(event));
-        }
-        return { event, done: Promise.all(results) };
-    }
-    fire(type, extra) {
-        return this.dispatch(type, extra).done;
-    }
-    focus() {
-        let visible = !this.disabled;
-        for (let node = this; node; node = node.parentElement)
-            visible &&= !node.hidden;
-        if (visible) this.ownerDocument.activeElement = this;
-    }
-    scrollIntoView() {}
-    checkValidity() {
-        if (this.disabled) return true;
-        if (
-            this.required &&
-            (!this.value || (this.type === "checkbox" && !this.checked))
-        )
-            return false;
-        return (
-            this.type !== "email" ||
-            !this.value ||
-            /^[^\s@]+@[^\s@]+\.[^\s@]+$/u.test(this.value)
-        );
-    }
-    reportValidity() {
-        this.focus();
-        return this.checkValidity();
-    }
-}
-for (const property of ["id", "name", "type", "className", "action", "href"]) {
-    const attribute = property === "className" ? "class" : property;
-    Object.defineProperty(Element.prototype, property, {
-        get() {
-            return (
-                this.getAttribute(attribute) ??
-                (property === "type" && this.tagName === "INPUT" ? "text" : "")
-            );
-        },
-        set(value) {
-            this.setAttribute(attribute, value);
-        },
-    });
-}
-
-class FakeFormData {
-    constructor(form) {
-        this.values = form
-            .querySelectorAll("input,textarea,select")
-            .filter(
-                (input) =>
-                    input.name &&
-                    !input.disabled &&
-                    !["submit", "button", "reset"].includes(input.type) &&
-                    (!["checkbox", "radio"].includes(input.type) ||
-                        input.checked),
-            )
-            .map((input) => [input.name, input.value]);
-    }
-    entries() {
-        return this.values[Symbol.iterator]();
-    }
-    [Symbol.iterator]() {
-        return this.entries();
-    }
-    get(name) {
-        return this.values.find(([key]) => key === name)?.[1] ?? null;
-    }
-    getAll(name) {
-        return this.values
-            .filter(([key]) => key === name)
-            .map(([, value]) => value);
-    }
-}
+import { Element, FakeFormData } from "./helpers/public-runtime.mjs";
 
 const email = (key, label = "Vecāka e-pasts") => ({
     key,
@@ -317,7 +68,11 @@ const deferred = () => {
 };
 const flush = () => new Promise((resolve) => setImmediate(resolve));
 
-function runtime(replies = [], definitions = defaultDefinitions) {
+function runtime(
+    replies = [],
+    definitions = defaultDefinitions,
+    settings = {},
+) {
     const document = new Element("document", null);
     document.ownerDocument = document;
     document.createElement = (tag) => new Element(tag, document);
@@ -331,12 +86,42 @@ function runtime(replies = [], definitions = defaultDefinitions) {
     const form = add(document, "form", {
         id: "survey-form",
         action: "/answers",
-        dataset: { sectionCount: "1" },
+        dataset: {
+            sectionCount: "1",
+            contactScope: settings.scope,
+            contactDefinition: settings.hash,
+            draftScope: settings.draftScope,
+            sessionResume: settings.resumeToken,
+            sessionUrl: settings.sessionUrl,
+        },
     });
     add(form, "input", { type: "hidden", name: "_token", value: "csrf-test" });
+    if (settings.sessionUrl)
+        add(form, "input", {
+            type: "hidden",
+            name: "submission_id",
+            value: contactId(1),
+        });
     const errorBox = add(form, "div", { id: "form-errors", hidden: true });
     const intro = add(form, "section", { dataset: { step: "-1" } });
     add(intro, "h1", { textContent: "Pirms sākam" });
+    if (settings.family) {
+        const roles = ["mother", "father", "guardian"].map((value) =>
+            add(intro, "input", {
+                type: "radio",
+                name: "role",
+                value,
+                required: true,
+                disabled: settings.usedRoles?.includes(value) || false,
+                checked: settings.role === value,
+            }),
+        );
+        roles.forEach((input) => {
+            input.checkValidity = () =>
+                input.disabled ||
+                roles.some((role) => !role.disabled && role.checked);
+        });
+    }
     add(intro, "input", {
         id: "respondent-anonymous",
         type: "checkbox",
@@ -360,7 +145,17 @@ function runtime(replies = [], definitions = defaultDefinitions) {
             },
         });
         const options = add(question, "div", { className: "answer-options" });
-        for (const value of ["yes", "maybe", "unrelated"]) {
+        if (type === "text") {
+            add(question, "textarea", { name: "answers[" + key + "]" });
+            add(question, "p", { hidden: true, dataset: { fieldError: "" } });
+            continue;
+        }
+        for (const value of [
+            "yes",
+            "maybe",
+            "unrelated",
+            ...(definition.allowOther ? ["other"] : []),
+        ]) {
             const label = add(options, "label");
             add(label, "input", {
                 type: type === "multiple" ? "checkbox" : "radio",
@@ -371,6 +166,13 @@ function runtime(replies = [], definitions = defaultDefinitions) {
             });
             add(label, "span", { textContent: value });
         }
+        if (definition.allowOther) {
+            const other = add(question, "div", {
+                hidden: true,
+                dataset: { other: "" },
+            });
+            add(other, "textarea", { name: "other_answers[" + key + "]" });
+        }
         add(question, "p", { hidden: true, dataset: { fieldError: "" } });
         const block = add(question, "div", {
             dataset: {
@@ -378,7 +180,9 @@ function runtime(replies = [], definitions = defaultDefinitions) {
                 triggers: JSON.stringify(
                     definition.triggerValues || ["yes", "maybe"],
                 ),
-                contactId: "server-uuid-" + key,
+                contactId: settings.cache
+                    ? contactId(blocks.length + 1)
+                    : "server-uuid-" + key,
                 endpoint: "/contacts/" + key,
                 contactPrompt:
                     definition.prompt || "Sazinieties ar mani par " + key,
@@ -469,10 +273,17 @@ function runtime(replies = [], definitions = defaultDefinitions) {
     const windowEvents = new Element("window", document);
     const context = vm.createContext({
         document,
+        sessionStorage: settings.storage,
         FormData: FakeFormData,
+        URL,
+        TextEncoder,
         matchMedia: () => ({ matches: true }),
         addEventListener: windowEvents.addEventListener.bind(windowEvents),
-        location: { assign: (url) => redirects.push(url) },
+        location: {
+            href: "http://mikausis.test/answers",
+            origin: "http://mikausis.test",
+            assign: (url) => redirects.push(url),
+        },
         fetch: (url, options) => {
             calls.push({ url, ...options });
             assert.ok(queue.length, "Unexpected fetch: " + url);
@@ -499,6 +310,7 @@ function runtime(replies = [], definitions = defaultDefinitions) {
         submit,
         calls,
         redirects,
+        context,
         post: () => form.fire("submit"),
         goReview: () => navigation.fire("click"),
         optIn: async () => {
@@ -1151,4 +963,349 @@ test("contact validation focuses an enabled shared select on review; initial rej
         2,
         "Skipping must not start another contact request",
     );
+});
+
+test("main selections enter the tab cache only after main success, without consent or unrelated values", async () => {
+    const storage = memoryStorage();
+    const main = deferred();
+    const fixture = runtime([main.promise], defaultDefinitions, {
+        storage,
+        scope: "survey",
+        hash: definitionHash,
+        cache: true,
+    });
+    const posting = fixture.post();
+    assert.equal(storage.getItem(cacheKey()), null);
+    main.resolve(mainSaved());
+    await posting;
+    const record = JSON.parse(storage.getItem(cacheKey()));
+    assert.deepEqual(
+        record.entries.map(({ key, values, status }) => ({
+            key,
+            values,
+            status,
+        })),
+        [
+            { key: "a", values: ["yes"], status: "available" },
+            { key: "b", values: ["yes", "maybe"], status: "available" },
+        ],
+    );
+    assert.equal(storage.getItem(cacheKey()).includes("unrelated"), false);
+    assert.equal(storage.getItem(cacheKey()).includes("stale-secret"), false);
+    assert.equal(contactCalls(fixture).length, 0);
+});
+
+test("main failure never caches selections and unavailable tab storage never blocks submission", async () => {
+    const storage = memoryStorage();
+    const fixture = runtime(
+        [response(422, { errors: { answers: ["Pārbaudiet atbildes."] } })],
+        defaultDefinitions,
+        {
+            storage,
+            scope: "survey",
+            hash: definitionHash,
+            cache: true,
+        },
+    );
+    await fixture.post();
+    assert.equal(storage.getItem(cacheKey()), null);
+    const unavailable = runtime([mainSaved()], defaultDefinitions, {
+        scope: "survey",
+        hash: definitionHash,
+        cache: true,
+        storage: {
+            getItem() {
+                throw new Error("Unavailable");
+            },
+            setItem() {
+                throw new Error("Unavailable");
+            },
+            removeItem() {
+                throw new Error("Unavailable");
+            },
+        },
+    });
+    await unavailable.post();
+    assert.deepEqual(unavailable.redirects, ["/thanks"]);
+});
+
+test("main skip preserves saved, uncertain and safely rejected available cache entries", async () => {
+    const storage = memoryStorage();
+    const first = deferred();
+    const third = { ...defaultDefinitions[0], key: "c" };
+    const fixture = runtime(
+        [mainSaved(), first.promise, rejected(), contactSaved()],
+        [...defaultDefinitions, third],
+        {
+            storage,
+            scope: "survey",
+            hash: definitionHash,
+            cache: true,
+        },
+    );
+    await fixture.optIn();
+    await fixture.fill("Vecāka e-pasts", "parent@example.test");
+    const posting = fixture.post();
+    await flush();
+    assert.ok(
+        JSON.parse(storage.getItem(cacheKey())).entries.every(
+            ({ status }) => status === "uncertain",
+        ),
+    );
+    first.reject(new TypeError("Offline"));
+    await posting;
+    const before = storage.getItem(cacheKey());
+    assert.deepEqual(
+        JSON.parse(before).entries.map(({ status }) => status),
+        ["uncertain", "available", "saved"],
+    );
+    await fixture.skip.fire("click");
+    assert.equal(storage.getItem(cacheKey()), before);
+    assert.equal(before.includes("parent@example.test"), false);
+    assert.equal(fixture.beforeUnload().defaultPrevented, false);
+});
+
+test("refresh restores answers, other text and review step but no contact values or consent", async () => {
+    const storage = memoryStorage();
+    const definitions = [
+        { ...defaultDefinitions[0], allowOther: true },
+        defaultDefinitions[1],
+        { key: "notes", type: "text" },
+    ];
+    const settings = {
+        storage,
+        hash: definitionHash,
+        draftScope: "draft-scope",
+        resumeToken: "encrypted-proof-original",
+        scope: "survey",
+    };
+    const first = runtime([], definitions, settings);
+    const a = first.form.querySelector('[data-question="a"]');
+    a.querySelectorAll(".answer-options input").forEach((input) => {
+        input.checked = input.value === "other";
+    });
+    await a
+        .querySelectorAll("input")
+        .find((input) => input.value === "other")
+        .fire("change");
+    const other = a.querySelector("textarea");
+    other.value = "Unfinished other answer";
+    await other.fire("input");
+    const text = first.form.querySelector('[data-question="notes"] textarea');
+    text.value = "Unfinished text answer";
+    await text.fire("input");
+    await first.goReview();
+    await first.optIn();
+    await first.fill("Vecāka e-pasts", "contact-canary@example.test");
+    first.beforeUnload();
+    const key = "mikausis.survey-draft:draft-scope";
+    const raw = storage.getItem(key);
+    assert.ok(raw);
+    assert.equal(raw.includes("contact-canary"), false);
+    assert.equal(raw.includes("stale-secret"), false);
+    const record = JSON.parse(raw);
+    assert.equal(record.step, 1);
+    assert.equal(record.answers.a, "other");
+    assert.equal(record.answers.notes, "Unfinished text answer");
+    const second = runtime([], definitions, {
+        ...settings,
+        resumeToken: "encrypted-proof-new-get",
+    });
+    assert.equal(second.form.dataset.sessionResume, "encrypted-proof-original");
+    assert.equal(second.review.hidden, false);
+    assert.equal(
+        second.form
+            .querySelectorAll('[data-question="a"] .answer-options input')
+            .find((input) => input.value === "other").checked,
+        true,
+    );
+    assert.equal(
+        second.form.querySelector('[data-question="a"] textarea').value,
+        other.value,
+    );
+    assert.equal(
+        second.form.querySelector('[data-question="notes"] textarea').value,
+        text.value,
+    );
+    assert.deepEqual(
+        second.form
+            .querySelectorAll(
+                '[data-question="b"] .answer-options input:checked',
+            )
+            .map((input) => input.value),
+        record.answers.b,
+    );
+    assert.equal(second.consent.checked, false);
+    await second.optIn();
+    assert.ok(
+        second.fields
+            .querySelectorAll("input,select")
+            .every((input) => input.value === ""),
+    );
+});
+
+test("main success removes the draft and main failure retains it with editable answers", async () => {
+    for (const saved of [true, false]) {
+        const storage = memoryStorage();
+        const fixture = runtime(
+            [saved ? mainSaved() : response(500, {})],
+            defaultDefinitions,
+            {
+                storage,
+                hash: definitionHash,
+                draftScope: "draft-scope",
+                resumeToken: "encrypted-proof",
+                scope: "survey",
+            },
+        );
+        await fixture.goReview();
+        const key = "mikausis.survey-draft:draft-scope";
+        assert.ok(storage.getItem(key));
+        await fixture.post();
+        assert.equal(storage.getItem(key) === null, saved);
+        assert.equal(
+            fixture.form.querySelector('[data-question="a"] input').disabled,
+            saved,
+        );
+        assert.equal(fixture.submit.disabled, false);
+    }
+});
+
+test("runtime renews an expired session once and submits the same answers without reloading", async () => {
+    const renewed = (letter) =>
+        response(200, {
+            csrf_token: letter.repeat(40),
+            submission_id: contactId(1),
+            submitted: false,
+        });
+    const fixture = runtime(
+        [renewed("a"), response(419, {}), renewed("b"), mainSaved()],
+        defaultDefinitions,
+        {
+            sessionUrl: "/session",
+            resumeToken: "encrypted-proof",
+            storage: memoryStorage(),
+            hash: definitionHash,
+            draftScope: "draft-scope",
+        },
+    );
+    await flush();
+    await fixture.post();
+    assert.deepEqual(
+        fixture.calls.map(({ method }) => method),
+        ["GET", "POST", "GET", "POST"],
+    );
+    const posts = fixture.calls.filter(({ method }) => method === "POST");
+    assert.deepEqual(
+        [...posts[0].body.entries()],
+        [...posts[1].body.entries()],
+    );
+    assert.equal(posts[1].body.get("submission_id"), contactId(1));
+    assert.deepEqual(fixture.redirects, ["/thanks"]);
+});
+
+test("restored family draft reaches proven completion before a used role can block validation", async () => {
+    const storage = memoryStorage();
+    const settings = {
+        storage,
+        hash: definitionHash,
+        draftScope: "family-draft",
+        resumeToken: "encrypted-family-proof",
+        family: true,
+        role: "mother",
+        scope: "survey",
+        cache: true,
+    };
+    const original = runtime([], defaultDefinitions, settings);
+    await original.goReview();
+    assert.ok(storage.getItem("mikausis.survey-draft:family-draft"));
+    const restored = runtime(
+        [
+            response(200, {
+                csrf_token: "b".repeat(40),
+                submission_id: contactId(1),
+                submitted: true,
+                redirect: "/thanks",
+            }),
+        ],
+        defaultDefinitions,
+        {
+            ...settings,
+            sessionUrl: "/session",
+            role: undefined,
+            usedRoles: ["mother"],
+        },
+    );
+    await flush();
+    assert.equal(
+        restored.form.querySelector('input[name="role"]:checked'),
+        null,
+    );
+    assert.deepEqual(restored.redirects, ["http://mikausis.test/thanks"]);
+    assert.deepEqual(
+        restored.calls.map(({ method }) => method),
+        ["GET"],
+    );
+    assert.equal(storage.getItem("mikausis.survey-draft:family-draft"), null);
+    assert.equal(restored.beforeUnload().defaultPrevented, false);
+    assert.deepEqual(
+        JSON.parse(storage.getItem(cacheKey())).entries.map(
+            ({ status }) => status,
+        ),
+        ["available", "available"],
+    );
+});
+
+test("proving an in-memory ambiguous main success retains contact values until explicit retry", async () => {
+    const renewal = response(200, {
+        csrf_token: "b".repeat(40),
+        submission_id: contactId(1),
+        submitted: false,
+    });
+    const fixture = runtime(
+        [
+            renewal,
+            new TypeError("Offline"),
+            response(200, {
+                csrf_token: "c".repeat(40),
+                submission_id: contactId(1),
+                submitted: true,
+                redirect: "/thanks",
+            }),
+            contactSaved(),
+            contactSaved(),
+        ],
+        defaultDefinitions,
+        {
+            storage: memoryStorage(),
+            hash: definitionHash,
+            draftScope: "draft-scope",
+            resumeToken: "encrypted-proof",
+            sessionUrl: "/session",
+        },
+    );
+    await flush();
+    await fixture.optIn();
+    await fixture.fill("Vecāka e-pasts", "keep-contact@example.test");
+    await fixture.post();
+    assert.deepEqual(fixture.redirects, []);
+    await fixture.context.MikausisSurveySession.forForm(fixture.form).refresh(
+        true,
+    );
+    await fixture.goReview();
+    assert.deepEqual(fixture.redirects, []);
+    assert.equal(
+        fixture.input("Vecāka e-pasts").value,
+        "keep-contact@example.test",
+    );
+    await fixture.post();
+    const posts = fixture.calls.filter(({ method }) => method === "POST");
+    assert.equal(posts.length, 3);
+    assert.equal(posts[0].body instanceof FakeFormData, true);
+    assert.ok(
+        posts
+            .slice(1)
+            .every(({ body }) => body.includes("keep-contact@example.test")),
+    );
+    assert.deepEqual(fixture.redirects, ["http://mikausis.test/thanks"]);
 });

@@ -40,6 +40,7 @@
             </fieldset>
             @foreach ($config['fields'] as $field)
                 @php
+                    $field['type'] = \App\Support\ContactField::type($field);
                     $value = is_string($oldFields[$field['key']] ?? null) ? $oldFields[$field['key']] : '';
                     $error = 'fields.'.$field['key'];
                 @endphp

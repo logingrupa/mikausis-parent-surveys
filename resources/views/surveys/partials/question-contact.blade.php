@@ -11,6 +11,7 @@
     <div class="respondent-details" data-contact-details hidden>
         <p class="respondent-disclosure">Šī kontaktinformācija būs redzama iestādei tikai kopā ar izvēli šajā jautājumā. Pārējām aptaujas atbildēm to nepievienojam.</p>
         @foreach ($contactConfig['fields'] as $field)
+            @php($field = [...$field, 'type' => \App\Support\ContactField::type($field)])
             <div class="respondent-field">
                 <label for="{{ $contactPrefix }}-{{ $field['key'] }}">{{ $field['label'] }}@if ($field['required'])<span class="required-label"> Obligāti, ja atstājat kontaktinformāciju</span>@endif</label>
                 @if ($field['type'] === 'role')

@@ -195,8 +195,18 @@ export default function surveyEditor({
                     email: "E-pasta adrese",
                     tel: "Tālruņa numurs",
                     role: "Izvēle: mamma, tētis vai cits aizbildnis",
-                }[field.type] || "Īsa teksta atbilde"
+                }[this.contactFieldType(field)] || "Īsa teksta atbilde"
             );
+        },
+        contactFieldType(field) {
+            return (
+                { name: "text", email: "email", phone: "tel", role: "role" }[
+                    field.key
+                ] || field.type
+            );
+        },
+        canChangeContactFieldType(field) {
+            return !["name", "email", "phone", "role"].includes(field.key);
         },
         respondentFieldError(index) {
             const prefix = "data.builder.respondent_fields." + index;
@@ -390,6 +400,15 @@ export default function surveyEditor({
         updateCommonContactField(key, property, value) {
             if (!this.canEditCommonContacts) return;
             const source = this.commonContactQuestion;
+            const selected = this.commonContactFields.find(
+                (field) => field.key === key,
+            );
+            if (
+                property === "type" &&
+                selected &&
+                !this.canChangeContactFieldType(selected)
+            )
+                return;
             if (
                 property === "type" &&
                 ["text", "email", "tel", "role"].includes(value)
@@ -668,6 +687,11 @@ export default function surveyEditor({
                 (item) => item.key === key,
             );
             if (field) {
+                if (
+                    property === "type" &&
+                    !this.canChangeContactFieldType(field)
+                )
+                    return;
                 if (property === "type" && field.type !== value)
                     delete this.previewContacts[question.key]?.values[key];
                 field[property] =

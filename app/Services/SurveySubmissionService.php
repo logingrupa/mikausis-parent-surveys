@@ -7,6 +7,8 @@ use App\Models\FamilyParticipation;
 use App\Models\QuestionAnswer;
 use App\Models\Survey;
 use App\Models\SurveyResponse;
+use App\Rules\ContactPhone;
+use App\Support\ContactField;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
@@ -125,7 +127,7 @@ class SurveySubmissionService
             throw ValidationException::withMessages(['respondent' => 'Lūdzu, pārbaudiet respondenta datus.']);
         }
 
-        $fields = $survey->respondentFields();
+        $fields = array_map(fn (array $field) => [...$field, 'type' => ContactField::type($field)], $survey->respondentFields());
         $values = [];
         $rules = [];
         $attributes = [];
@@ -154,6 +156,8 @@ class SurveySubmissionService
                 };
                 if ($field['type'] === 'email') {
                     $rules[$path][] = 'email:rfc';
+                } elseif ($field['type'] === 'tel') {
+                    $rules[$path][] = new ContactPhone;
                 }
             }
             $attributes[$path] = $field['label'];

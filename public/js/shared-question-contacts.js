@@ -5,6 +5,22 @@
     // Definitions, selections and returned snapshots are copied; no DOM or storage.
     const limits = { text: 160, email: 254, tel: 40, role: null };
     const roles = ["mother", "father", "guardian"];
+    const builtInTypes = {
+        name: "text",
+        email: "email",
+        phone: "tel",
+        role: "role",
+    };
+    const validPhone = (value) => {
+        if (!/^\+?[0-9 ()-]+$/u.test(value)) return false;
+        let number = value.replace(/[ ()-]/gu, "");
+        if (number.startsWith("00")) number = "+" + number.slice(2);
+        if (number.startsWith("+371"))
+            return /^\+371[26][0-9]{7}$/u.test(number);
+        return number.startsWith("+")
+            ? /^\+[1-9][0-9]{6,14}$/u.test(number)
+            : /^[26][0-9]{7}$/u.test(number);
+    };
     const typeLabels = {
         text: "īss teksts",
         email: "e-pasts",
@@ -30,18 +46,21 @@
             keys.add(key);
             const fields = new Map();
             for (const field of definition.fields || []) {
+                const type = Object.hasOwn(builtInTypes, field.key)
+                    ? builtInTypes[field.key]
+                    : field.type;
                 if (
                     typeof field.key !== "string" ||
                     typeof field.label !== "string" ||
                     !field.label.trim() ||
-                    !Object.hasOwn(limits, field.type)
+                    !Object.hasOwn(limits, type)
                 )
                     continue;
-                const cap = limits[field.type];
+                const cap = limits[type];
                 fields.set(field.key, {
                     key: field.key,
                     label: field.label.trim(),
-                    type: field.type,
+                    type,
                     required: field.required === true,
                     maxLength:
                         cap === null
@@ -242,6 +261,8 @@
                 const value = field.value.trim();
                 let code = null;
                 if (field.required && !value) code = "required";
+                else if (value && field.type === "tel" && !validPhone(value))
+                    code = "phone";
                 else if (
                     value &&
                     field.maxLength !== null &&

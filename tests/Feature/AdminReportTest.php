@@ -9,6 +9,9 @@ use App\Models\School;
 use App\Models\Survey;
 use App\Models\SurveyResponse;
 use App\Models\User;
+use DOMDocument;
+use DOMElement;
+use DOMXPath;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -114,7 +117,16 @@ class AdminReportTest extends TestCase
             ->assertDontSee('Vai vēlaties jaunumus?')
             ->assertDontSee('Jā, noteikti')
             ->assertDontSee(self::PRIVATE_TEXT)
-            ->assertDontSee('PRIVATE-TEXT-', false);
+            ->assertDontSee('PRIVATE-TEXT-', false)
+            ->assertDontSee('window.print()', false)
+            ->assertDontSee(route('reports.html', $survey), false)
+            ->assertDontSee(route('reports.html.download', $survey), false);
+
+        $button = $this->reportAction($response->getContent(), 'Drukāt atskaiti');
+        $this->assertSame('button', $button->tagName);
+        $this->assertTrue($button->hasAttribute('disabled'));
+        $this->assertFalse($button->hasAttribute('href'));
+        $this->assertFalse($button->hasAttribute('x-on:click'));
 
         $response->assertSee($count === 0
             ? 'Vēl nav iesniegtu atbilžu'
@@ -157,7 +169,35 @@ class AdminReportTest extends TestCase
             ->assertDontSee($invitation->token)
             ->assertDontSee($invitation->label)
             ->assertSee(route('reports.export', $survey), false)
-            ->assertSee('window.print()', false);
+            ->assertDontSee('window.print()', false);
+    }
+
+    public function test_print_action_opens_the_standalone_report_with_an_explicit_print_flag(): void
+    {
+        $school = $this->school();
+        $survey = $this->survey($school);
+        $this->responses($survey, 5);
+        $this->actingAs($this->user($school));
+
+        $response = $this->get($this->reportUrl($survey))->assertOk()
+            ->assertDontSee('window.print()', false);
+        $html = $response->getContent();
+        foreach ([
+            'Drukāt atskaiti' => route('reports.html', ['survey' => $survey, 'print' => 1]),
+            'Atvērt drukas skatu' => route('reports.html', $survey),
+            'Lejupielādēt HTML' => route('reports.html.download', $survey),
+        ] as $label => $url) {
+            $link = $this->reportAction($html, $label);
+            $this->assertSame('a', $link->tagName);
+            $this->assertSame($url, $link->getAttribute('href'));
+            $this->assertFalse($link->hasAttribute('x-on:click'));
+            if ($label !== 'Lejupielādēt HTML') {
+                $this->assertSame('_blank', $link->getAttribute('target'));
+                $this->assertContains('noopener', explode(' ', $link->getAttribute('rel')));
+                $this->assertContains('noreferrer', explode(' ', $link->getAttribute('rel')));
+            }
+        }
+        $this->assertDoesNotMatchRegularExpression('/\.fi-header\b[^{}]*\{[^}]*display\s*:\s*none/i', $html);
     }
 
     public function test_csv_stream_contains_only_allowed_aggregates_with_question_denominators(): void
@@ -314,6 +354,24 @@ class AdminReportTest extends TestCase
     private function reportUrl(Survey $survey): string
     {
         return '/admin/aptaujas/'.$survey->getRouteKey().'/atskaite';
+    }
+
+    private function reportAction(string $html, string $label): DOMElement
+    {
+        $document = new DOMDocument;
+        $previous = libxml_use_internal_errors(true);
+        try {
+            $this->assertTrue($document->loadHTML('<?xml encoding="UTF-8">'.$html, LIBXML_NONET));
+        } finally {
+            libxml_clear_errors();
+            libxml_use_internal_errors($previous);
+        }
+        $actions = (new DOMXPath($document))->query('//*[contains(@class, "mikausis-report-actions")]/*[normalize-space(.)="'.$label.'"]');
+        $this->assertCount(1, $actions);
+        $action = $actions->item(0);
+        $this->assertInstanceOf(DOMElement::class, $action);
+
+        return $action;
     }
 
     private function csvRows(string $csv): array

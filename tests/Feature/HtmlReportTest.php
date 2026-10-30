@@ -44,41 +44,72 @@ class HtmlReportTest extends TestCase
 
     public static function htmlEndpoints(): array
     {
-        return ['print view' => ['reports.html'], 'download' => ['reports.html.download']];
+        return [
+            'print view' => ['reports.html', []],
+            'automatic print' => ['reports.html', ['print' => '1']],
+            'download' => ['reports.html.download', []],
+            'download with print flag' => ['reports.html.download', ['print' => '1']],
+        ];
+    }
+
+    public static function printFlags(): array
+    {
+        return [
+            'explicit flag' => [['print' => '1'], true],
+            'missing flag' => [[], false],
+            'disabled flag' => [['print' => '0'], false],
+            'empty flag' => [['print' => ''], false],
+            'boolean word' => [['print' => 'true'], false],
+            'unrelated flag' => [['autoprint' => '1'], false],
+            'array flag' => [['print' => ['1']], false],
+        ];
+    }
+
+    #[DataProvider('printFlags')]
+    public function test_only_the_explicit_print_flag_enables_the_automatic_dialog(array $query, bool $autoPrint): void
+    {
+        $school = $this->school();
+        $survey = $this->survey($school);
+        $this->responses($survey);
+        $this->actingAs($this->user($school));
+
+        $response = $this->get(route('reports.html', ['survey' => $survey, ...$query]))
+            ->assertOk()->assertViewHas('autoPrint', $autoPrint)->assertSee('Pirmā doma');
+        $this->assertCount($autoPrint ? 1 : 0, $this->xpath($response->getContent())->query('//script'));
     }
 
     #[DataProvider('htmlEndpoints')]
-    public function test_guests_must_log_in(string $endpoint): void
+    public function test_guests_must_log_in(string $endpoint, array $query): void
     {
         $survey = $this->survey($this->school());
 
-        $this->get(route($endpoint, $survey))->assertRedirect(url('/admin/login'));
-        $this->getJson(route($endpoint, $survey))->assertUnauthorized();
+        $this->get(route($endpoint, ['survey' => $survey, ...$query]))->assertRedirect(url('/admin/login'));
+        $this->getJson(route($endpoint, ['survey' => $survey, ...$query]))->assertUnauthorized();
     }
 
     #[DataProvider('htmlEndpoints')]
-    public function test_non_admins_cannot_access_html_reports(string $endpoint): void
+    public function test_non_admins_cannot_access_html_reports(string $endpoint, array $query): void
     {
         $school = $this->school();
         $survey = $this->survey($school);
         $this->responses($survey);
         $this->actingAs($this->user($school, false));
 
-        $this->get(route($endpoint, $survey))->assertForbidden()->assertDontSee('Pirmā doma');
+        $this->get(route($endpoint, ['survey' => $survey, ...$query]))->assertForbidden()->assertDontSee('Pirmā doma')->assertDontSee('report-auto-print', false);
     }
 
     #[DataProvider('htmlEndpoints')]
-    public function test_admins_without_a_school_cannot_access_html_reports(string $endpoint): void
+    public function test_admins_without_a_school_cannot_access_html_reports(string $endpoint, array $query): void
     {
         $survey = $this->survey($this->school());
         $this->responses($survey);
         $this->actingAs($this->user(null));
 
-        $this->get(route($endpoint, $survey))->assertForbidden()->assertDontSee('Pirmā doma');
+        $this->get(route($endpoint, ['survey' => $survey, ...$query]))->assertForbidden()->assertDontSee('Pirmā doma')->assertDontSee('report-auto-print', false);
     }
 
     #[DataProvider('htmlEndpoints')]
-    public function test_a_stale_school_id_does_not_authorize_an_admin(string $endpoint): void
+    public function test_a_stale_school_id_does_not_authorize_an_admin(string $endpoint, array $query): void
     {
         $school = $this->school();
         $survey = $this->survey($school);
@@ -87,29 +118,30 @@ class HtmlReportTest extends TestCase
         $admin->school_id = 999999;
         $this->actingAs($admin);
 
-        $this->get(route($endpoint, $survey))->assertForbidden()->assertDontSee('Pirmā doma');
+        $this->get(route($endpoint, ['survey' => $survey, ...$query]))->assertForbidden()->assertDontSee('Pirmā doma')->assertDontSee('report-auto-print', false);
     }
 
     #[DataProvider('htmlEndpoints')]
-    public function test_admins_cannot_access_another_schools_html_report(string $endpoint): void
+    public function test_admins_cannot_access_another_schools_html_report(string $endpoint, array $query): void
     {
         $survey = $this->survey($this->school());
         $this->responses($survey);
         $this->actingAs($this->user($this->school()));
 
-        $this->get(route($endpoint, $survey))
+        $this->get(route($endpoint, ['survey' => $survey, ...$query]))
             ->assertForbidden()
             ->assertDontSee($survey->title)
             ->assertDontSee('Pirmā doma')
-            ->assertDontSee('mara.private@example.test');
+            ->assertDontSee('mara.private@example.test')
+            ->assertDontSee('report-auto-print', false);
     }
 
     #[DataProvider('htmlEndpoints')]
-    public function test_missing_surveys_return_not_found(string $endpoint): void
+    public function test_missing_surveys_return_not_found(string $endpoint, array $query): void
     {
         $this->actingAs($this->user($this->school()));
 
-        $this->get(route($endpoint, ['survey' => 999999]))->assertNotFound();
+        $this->get(route($endpoint, ['survey' => 999999, ...$query]))->assertNotFound();
     }
 
     public static function suppressedCounts(): array
@@ -125,15 +157,17 @@ class HtmlReportTest extends TestCase
         $this->responses($survey, $count);
         $this->actingAs($this->user($school));
 
-        foreach (array_column(self::htmlEndpoints(), 0) as $endpoint) {
-            $this->get(route($endpoint, $survey))
+        foreach (self::htmlEndpoints() as [$endpoint, $query]) {
+            $this->get(route($endpoint, ['survey' => $survey, ...$query]))
                 ->assertForbidden()
                 ->assertDontSee($survey->title)
                 ->assertDontSee('Vai saņemt ziņas?')
                 ->assertDontSee('Jā, vēlos jaunumus')
                 ->assertDontSee('Pirmā doma')
                 ->assertDontSee('Māra Ozola')
-                ->assertDontSee('mara.private@example.test');
+                ->assertDontSee('mara.private@example.test')
+                ->assertDontSee('report-auto-print', false)
+                ->assertDontSee('window.print()', false);
         }
 
         $report = app(SurveyReportService::class)->build($survey, true);
@@ -142,7 +176,7 @@ class HtmlReportTest extends TestCase
     }
 
     #[DataProvider('htmlEndpoints')]
-    public function test_html_groups_each_question_summary_and_unordered_answers_in_survey_order(string $endpoint): void
+    public function test_html_groups_each_question_summary_and_unordered_answers_in_survey_order(string $endpoint, array $query): void
     {
         $school = $this->school();
         $survey = $this->survey($school);
@@ -159,7 +193,7 @@ class HtmlReportTest extends TestCase
         $survey->setRelation('responses', collect());
         $this->actingAs($this->user($school));
 
-        $response = $this->get(route($endpoint, $survey))->assertOk();
+        $response = $this->get(route($endpoint, ['survey' => $survey, ...$query]))->assertOk();
         $response->assertSee('<!--email_off-->', false)->assertSee('<!--/email_off-->', false);
         $xpath = $this->xpath($response->getContent());
         $sections = $xpath->query('//section[contains(concat(" ", normalize-space(@class), " "), " question ")]');
@@ -318,14 +352,14 @@ class HtmlReportTest extends TestCase
     }
 
     #[DataProvider('htmlEndpoints')]
-    public function test_html_is_self_contained_and_has_a_print_button_and_a4_print_styles(string $endpoint): void
+    public function test_html_is_self_contained_and_has_a_print_button_and_a4_print_styles(string $endpoint, array $query): void
     {
         $school = $this->school();
         $survey = $this->survey($school);
         $this->responses($survey);
         $this->actingAs($this->user($school));
 
-        $response = $this->get(route($endpoint, $survey))->assertOk();
+        $response = $this->get(route($endpoint, ['survey' => $survey, ...$query]))->assertOk();
         $xpath = $this->xpath($response->getContent());
         $css = $xpath->evaluate('string(//head/style)');
         $this->assertMatchesRegularExpression('/@media\s+print\s*\{/i', $css);
@@ -340,7 +374,13 @@ class HtmlReportTest extends TestCase
         $this->assertDoesNotMatchRegularExpression('/@import\b/i', $css);
         $this->assertCount(1, $xpath->query('//button[@onclick="window.print()"]'));
         $this->assertCount(1, $xpath->query('//img[starts-with(@src, "data:image/")]'));
-        $this->assertCount(0, $xpath->query('//script | //link[@href] | //iframe | //object | //embed | //base | //video | //audio | //source'));
+        $this->assertCount(0, $xpath->query('//script[@src] | //link[@href] | //iframe | //object | //embed | //base | //video | //audio | //source'));
+        $autoPrint = $endpoint === 'reports.html' && ($query['print'] ?? null) === '1';
+        $this->assertCount($autoPrint ? 1 : 0, $xpath->query('//script'));
+        if ($autoPrint) {
+            $this->assertSame(file_get_contents(public_path('js/report-print.js')), $xpath->evaluate('string(//script[@id="report-auto-print"])'));
+            $response->assertSeeInOrder(['</main>', '<script id="report-auto-print">'], false);
+        }
         foreach ($xpath->query('//*[@src or @srcset or @poster or @background]') as $resource) {
             $this->assertStringStartsWith('data:', $resource->getAttribute('src'));
             $this->assertFalse($resource->hasAttribute('srcset'));
@@ -350,7 +390,7 @@ class HtmlReportTest extends TestCase
     }
 
     #[DataProvider('htmlEndpoints')]
-    public function test_hostile_titles_questions_choices_answers_and_respondent_fields_are_escaped(string $endpoint): void
+    public function test_hostile_titles_questions_choices_answers_and_respondent_fields_are_escaped(string $endpoint, array $query): void
     {
         $school = $this->school();
         $title = 'Aptauja </title><script id="hostile-title">alert("title")</script>';
@@ -372,13 +412,13 @@ class HtmlReportTest extends TestCase
         }
         $this->actingAs($this->user($school));
 
-        $response = $this->get(route($endpoint, $survey))->assertOk();
+        $response = $this->get(route($endpoint, ['survey' => $survey, ...$query]))->assertOk();
         foreach ([$title, $question, $choice, $text, $name, $label, $other] as $hostile) {
             $response->assertSee($hostile)->assertDontSee($hostile, false);
         }
         $response->assertDontSee(self::CUSTOM_KEY, false);
         $xpath = $this->xpath($response->getContent());
-        $this->assertCount(0, $xpath->query('//script | //svg | //iframe | //*[@onerror or @onload] | //*[starts-with(@id, "hostile-")]'));
+        $this->assertCount(0, $xpath->query('//script[not(@id="report-auto-print")] | //svg | //iframe | //*[@onerror or @onload] | //*[starts-with(@id, "hostile-")]'));
         $this->assertSame($title, $xpath->evaluate('string(//h1)'));
         $this->assertSame($question, $xpath->evaluate('string(//section[contains(@class, "question")]/h2)'));
         $answerTexts = array_map(fn (DOMNode $node): string => trim($node->textContent), iterator_to_array($xpath->query('//p[@class="answer-text"]')));
@@ -387,14 +427,14 @@ class HtmlReportTest extends TestCase
     }
 
     #[DataProvider('htmlEndpoints')]
-    public function test_html_responses_have_private_headers_and_download_has_the_expected_filename(string $endpoint): void
+    public function test_html_responses_have_private_headers_and_download_has_the_expected_filename(string $endpoint, array $query): void
     {
         $school = $this->school();
         $survey = $this->survey($school);
         $this->responses($survey);
         $this->actingAs($this->user($school));
 
-        $response = $this->get(route($endpoint, $survey))
+        $response = $this->get(route($endpoint, ['survey' => $survey, ...$query]))
             ->assertOk()
             ->assertHeader('Content-Type', 'text/html; charset=UTF-8')
             ->assertHeader('Referrer-Policy', 'no-referrer')
@@ -409,6 +449,33 @@ class HtmlReportTest extends TestCase
         } else {
             $response->assertHeaderMissing('Content-Disposition');
         }
+    }
+
+    #[DataProvider('htmlEndpoints')]
+    public function test_html_reports_never_include_independent_contact_details(string $endpoint, array $query): void
+    {
+        $school = $this->school();
+        $survey = $this->survey($school, ['allow_identified_responses' => false]);
+        $questions = $survey->questions;
+        $questions[0]['contact'] = [
+            'trigger_values' => ['yes'],
+            'fields' => [['key' => 'email', 'label' => 'Saziņas e-pasts', 'type' => 'email', 'required' => true]],
+        ];
+        $survey->update(['questions' => $questions]);
+        $this->responses($survey);
+        $contact = $survey->questionContacts()->create([
+            'id' => (string) Str::uuid(),
+            'question_key' => 'z_choice',
+            'answer' => ['values' => ['yes'], 'labels' => ['Jā, vēlos jaunumus']],
+            'details' => ['fields' => [['key' => 'email', 'label' => 'Saziņas e-pasts', 'type' => 'email', 'value' => 'contact.private@example.test']]],
+        ]);
+        $this->actingAs($this->user($school));
+
+        $response = $this->get(route($endpoint, ['survey' => $survey, ...$query]))
+            ->assertOk()->assertSee('Jā, vēlos jaunumus')
+            ->assertDontSee('contact.private@example.test')->assertDontSee($contact->id, false);
+        $xpath = $this->xpath($response->getContent());
+        $this->assertCount(0, $xpath->query('(//section[contains(@class, "question")])[1]//*[@class="respondent"]/dl'));
     }
 
     public function test_csv_allowlist_excludes_generic_respondent_fields_even_from_an_enriched_report(): void

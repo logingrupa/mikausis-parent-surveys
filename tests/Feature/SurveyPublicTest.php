@@ -156,16 +156,19 @@ class SurveyPublicTest extends SurveyTestCase
         $this->postJson($url, $motherPayload)->assertOk();
         $this->assertDatabaseCount('survey_responses', 1);
         $this->assertDatabaseCount('family_participations', 1);
-        $this->get(route('surveys.show', ['slug' => $this->survey->slug]))->assertOk()
-            ->assertViewHas('submitted', true)->assertViewHas('submissionId', $motherId)
+        $publicForm = $this->get(route('surveys.show', ['slug' => $this->survey->slug]))->assertOk()
+            ->assertViewHas('submitted', true)
             ->assertDontSee('id="survey-form"', false)->assertDontSee('First private answer');
+        $publicId = $publicForm->viewData('submissionId');
+        $this->assertTrue(Str::isUuid($publicId));
+        $this->assertNotSame($motherId, $publicId);
 
         $fatherForm = $this->get($url)->assertOk()->assertViewHas('submitted', true)
             ->assertSee('id="survey-form"', false)->assertDontSee('First private answer')->assertDontSee($invitation->label);
         $fatherId = $fatherForm->viewData('submissionId');
         $this->assertTrue(Str::isUuid($fatherId));
         $this->assertNotSame($motherId, $fatherId);
-        $this->get($url)->assertViewHas('submissionId', $fatherId);
+        $this->assertNotSame($publicId, $fatherId);
 
         $fatherPayload = $this->payload(['q4' => 'Second private answer'], ['submission_id' => $fatherId, 'role' => 'father']);
         $this->postJson($url, $fatherPayload)->assertOk();
@@ -185,28 +188,35 @@ class SurveyPublicTest extends SurveyTestCase
         }
     }
 
-    public function test_family_links_for_the_same_survey_rotate_saved_ids_when_switching_families(): void
+    public function test_family_links_for_the_same_survey_have_separate_ids_and_participation_records(): void
     {
         $firstInvitation = $this->invitation();
         $secondInvitation = $this->invitation();
         $firstUrl = route('surveys.family', ['slug' => $this->survey->slug, 'token' => $firstInvitation->token]);
         $secondUrl = route('surveys.family', ['slug' => $this->survey->slug, 'token' => $secondInvitation->token]);
-        $firstId = $this->get($firstUrl)->assertOk()->viewData('submissionId');
-        $this->get($secondUrl)->assertOk()->assertViewHas('submissionId', $firstId);
-        $this->postJson($firstUrl, $this->payload(extra: ['submission_id' => $firstId, 'role' => 'mother']))->assertOk();
+        $firstForm = $this->get($firstUrl)->assertOk();
+        $firstId = $firstForm->viewData('submissionId');
+        $secondUnsavedId = $this->get($secondUrl)->assertOk()->viewData('submissionId');
+        $this->assertNotSame($firstId, $secondUnsavedId);
+        $this->getJson(route('surveys.family.session', ['slug' => $this->survey->slug, 'token' => $firstInvitation->token]), [
+            'X-Requested-With' => 'XMLHttpRequest', 'X-Survey-Resume' => $firstForm->viewData('submissionResumeToken'),
+        ])->assertOk()->assertJsonPath('submission_id', $firstId)->assertJsonPath('submitted', false);
+        $this->postJson($firstUrl, $this->payload(['q4' => 'First family private answer'], ['submission_id' => $firstId, 'role' => 'mother']))->assertOk();
 
         $secondId = $this->get($secondUrl)->assertOk()->viewData('submissionId');
         $this->assertNotSame($firstId, $secondId);
-        $this->get($secondUrl)->assertViewHas('submissionId', $secondId);
-        $this->postJson($secondUrl, $this->payload(extra: ['submission_id' => $secondId, 'role' => 'mother']))->assertOk();
+        $this->assertNotSame($secondUnsavedId, $secondId);
+        $this->postJson($secondUrl, $this->payload(['q4' => 'Second family private answer'], ['submission_id' => $secondId, 'role' => 'mother']))->assertOk();
 
         $this->assertDatabaseCount('survey_responses', 2);
         $this->assertDatabaseCount('family_participations', 2);
         $this->assertDatabaseHas('family_participations', ['invitation_id' => $firstInvitation->id, 'role' => 'mother']);
         $this->assertDatabaseHas('family_participations', ['invitation_id' => $secondInvitation->id, 'role' => 'mother']);
+        $this->assertSame(['q4' => ['value' => 'First family private answer', 'other' => null]], $this->survey->responses()->findOrFail($firstId)->answers);
+        $this->assertSame(['q4' => ['value' => 'Second family private answer', 'other' => null]], $this->survey->responses()->findOrFail($secondId)->answers);
     }
 
-    public function test_generic_page_keeps_submitted_state_and_uuid_until_a_family_link_starts_a_new_response(): void
+    public function test_generic_page_keeps_submitted_state_and_uses_a_separate_stable_uuid_after_family_pages(): void
     {
         $url = route('surveys.show', ['slug' => $this->survey->slug]);
         $id = $this->get($url)->assertOk()->viewData('submissionId');
@@ -220,9 +230,15 @@ class SurveyPublicTest extends SurveyTestCase
         $familyId = $this->get($familyUrl)->assertOk()->assertViewHas('submitted', true)
             ->assertSee('id="survey-form"', false)->viewData('submissionId');
         $this->assertNotSame($id, $familyId);
-        $this->get($familyUrl)->assertViewHas('submissionId', $familyId);
-        $this->get($url)->assertOk()->assertViewHas('submitted', true)->assertViewHas('submissionId', $familyId)
+        $nextFamilyId = $this->get($familyUrl)->assertOk()->viewData('submissionId');
+        $this->assertNotSame($familyId, $nextFamilyId);
+        $publicForm = $this->get($url)->assertOk()->assertViewHas('submitted', true)
             ->assertDontSee('id="survey-form"', false);
+        $publicId = $publicForm->viewData('submissionId');
+        $this->assertNotSame($id, $publicId);
+        $this->assertNotSame($familyId, $publicId);
+        $this->assertNotSame($nextFamilyId, $publicId);
+        $this->get($url)->assertOk()->assertViewHas('submitted', true)->assertViewHas('submissionId', $publicId);
         $this->assertDatabaseCount('survey_responses', 1);
         $this->assertDatabaseCount('family_participations', 0);
     }
@@ -238,7 +254,10 @@ class SurveyPublicTest extends SurveyTestCase
                 ->assertUnprocessable()->assertJsonValidationErrors('role');
             $this->assertDatabaseCount('survey_responses', 0);
             $this->assertDatabaseCount('family_participations', 0);
-            $this->get($url)->assertOk()->assertViewHas('submitted', false)->assertViewHas('submissionId', $id);
+            $this->assertSame($id, session('survey_submission_ids.'.$this->survey->id));
+            $nextId = $this->get($url)->assertOk()->assertViewHas('submitted', false)->viewData('submissionId');
+            $this->assertNotSame($id, $nextId);
+            $id = $nextId;
         }
 
         $this->postJson($url, $this->payload(extra: ['submission_id' => $id, 'role' => 'mother']))->assertOk();
@@ -258,9 +277,18 @@ class SurveyPublicTest extends SurveyTestCase
     {
         $invitation = $this->invitation();
         $url = route('surveys.family', ['slug' => $this->survey->slug, 'token' => $invitation->token]);
-        $id = $this->get($url)->assertOk()->viewData('submissionId');
-        $this->get($url)->assertViewHas('submissionId', $id);
-        $mother = $this->payload(extra: ['submission_id' => $id, 'role' => 'mother']);
+        $form = $this->get($url)->assertOk();
+        $id = $form->viewData('submissionId');
+        $nextId = $this->get($url)->assertOk()->viewData('submissionId');
+        $this->assertTrue(Str::isUuid($id));
+        $this->assertTrue(Str::isUuid($nextId));
+        $this->assertNotSame($id, $nextId);
+        $this->assertDatabaseCount('survey_responses', 0);
+        $this->assertDatabaseCount('family_participations', 0);
+        $this->getJson(route('surveys.family.session', ['slug' => $this->survey->slug, 'token' => $invitation->token]), [
+            'X-Requested-With' => 'XMLHttpRequest', 'X-Survey-Resume' => $form->viewData('submissionResumeToken'),
+        ])->assertOk()->assertJsonPath('submission_id', $id)->assertJsonPath('submitted', false);
+        $mother = $this->payload(['q4' => 'Mother private answer'], ['submission_id' => $id, 'role' => 'mother']);
         $this->postJson($url, $mother)->assertOk();
         $this->postJson($url, $this->payload(extra: ['submission_id' => $id, 'role' => 'father']))
             ->assertUnprocessable()->assertJsonValidationErrors('role');
@@ -268,9 +296,17 @@ class SurveyPublicTest extends SurveyTestCase
         $this->assertDatabaseCount('survey_responses', 1);
         $this->assertDatabaseCount('family_participations', 1);
         $newId = $this->get($url)->assertOk()->viewData('submissionId');
-        $this->postJson($url, $this->payload(extra: ['submission_id' => $newId, 'role' => 'father']))->assertOk();
+        $this->assertNotSame($id, $newId);
+        $this->assertNotSame($nextId, $newId);
+        $this->postJson($url, $this->payload(extra: ['submission_id' => $newId, 'role' => 'mother']))
+            ->assertUnprocessable()->assertJsonValidationErrors('role');
+        $this->assertDatabaseCount('survey_responses', 1);
+        $this->assertDatabaseCount('family_participations', 1);
+        $this->postJson($url, $this->payload(['q4' => 'Father private answer'], ['submission_id' => $newId, 'role' => 'father']))->assertOk();
         $this->assertDatabaseCount('survey_responses', 2);
         $this->assertDatabaseCount('family_participations', 2);
+        $this->assertSame(['q4' => ['value' => 'Mother private answer', 'other' => null]], $this->survey->responses()->findOrFail($id)->answers);
+        $this->assertSame(['q4' => ['value' => 'Father private answer', 'other' => null]], $this->survey->responses()->findOrFail($newId)->answers);
     }
 
     public function test_other_choice_is_rendered_when_enabled_without_an_explicit_option(): void

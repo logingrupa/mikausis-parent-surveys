@@ -201,5 +201,8 @@ FORM: A narrow extension of the existing report, specified by the brief; no conc
         </footer>
     </main>
     <!--/email_off-->
+    @if ($autoPrint)
+        <script id="report-auto-print">{!! file_get_contents(public_path('js/report-print.js')) !!}</script>
+    @endif
 </body>
 </html>

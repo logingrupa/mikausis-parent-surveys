@@ -881,8 +881,61 @@ textarea + .field-help {
 .thanks-panel .section-label {
     display: block;
     color: var(--success);
+    margin-bottom: 8px;
 }
-.message-panel .text-link {
+.thanks-panel {
+    padding: 24px 32px;
+}
+.thanks-panel h1 {
+    margin: 0 auto 8px;
+    font-size: 28px;
+}
+.thanks-panel > p {
+    margin-bottom: 8px;
+    line-height: 1.6;
+}
+.thanks-panel > .thanks-survey-title {
+    margin-bottom: 0;
+    font-size: 13px;
+    overflow-wrap: anywhere;
+}
+.contact-followup {
+    overflow-wrap: anywhere;
+}
+.contact-followup h2 {
+    font-size: 20px;
+}
+.contact-followup .shared-contacts {
+    margin-block: 20px;
+    padding-block: 20px;
+}
+.contact-page.thanks-contact-status {
+    padding: 20px;
+    border: 1px solid var(--border);
+    border-radius: var(--control-radius);
+    background: var(--lavender);
+    text-align: left;
+    overflow-wrap: anywhere;
+}
+.thanks-contact-status strong {
+    color: var(--success);
+    font-size: 15px;
+}
+.thanks-contact-status p {
+    margin: 8px 0 0;
+    font-size: 14px;
+    line-height: 1.6;
+}
+.thanks-actions {
+    max-width: 760px;
+    margin: 24px auto;
+    text-align: center;
+}
+.thanks-actions .button {
+    white-space: normal;
+}
+.message-panel .text-link,
+.thanks-actions .text-link {
     display: block;
     font-size: 13px;
     margin: 24px auto 0;
@@ -1154,6 +1207,20 @@ textarea + .field-help {
     }
     .message-panel > p {
         font-size: 14px;
+    }
+    .thanks-panel {
+        padding: 20px;
+    }
+    .thanks-panel h1 {
+        font-size: 24px;
+    }
+    .contact-page.thanks-contact-status {
+        padding: 16px;
+    }
+    .thanks-actions .button {
+        width: 100%;
+        padding-inline: 12px;
+        font-size: 13px;
     }
     .privacy-page {
         padding: 0 4px;

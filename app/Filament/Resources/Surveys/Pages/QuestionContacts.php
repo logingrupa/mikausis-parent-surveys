@@ -6,6 +6,7 @@ use App\Filament\Resources\Surveys\SurveyResource;
 use App\Filament\Support\SchoolAccess;
 use App\Models\QuestionContact;
 use App\Models\Survey;
+use App\Services\QuestionContactReportService;
 use Filament\Actions\Action;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\Concerns\InteractsWithRecord;
@@ -88,70 +89,11 @@ class QuestionContacts extends Page
     protected function getViewData(): array
     {
         $survey = $this->authorizedSurvey();
-        // Random order prevents matching rows across question contact lists by position.
-        $contacts = QuestionContact::query()->where('survey_id', $survey->getKey())
-            ->inRandomOrder()->get(['id', 'question_key', 'answer', 'details'])->groupBy('question_key');
-        $groups = [];
 
-        foreach ($survey->reportQuestions() as $question) {
-            if (! is_array($question['contact'] ?? null)) {
-                continue;
-            }
-            if (($question['archived'] ?? false) && $contacts->get($question['key'], collect())->isEmpty()) {
-                continue;
-            }
-
-            $groups[] = [
-                'title' => $question['title'],
-                'purpose' => $question['contact']['purpose'],
-                'archived' => (bool) ($question['archived'] ?? false),
-                'entries' => $contacts->get($question['key'], collect())
-                    ->map(fn (QuestionContact $contact): array => $this->displayContact($contact, $question))->all(),
-            ];
-        }
-
-        return ['surveyTitle' => $survey->title, 'groups' => $groups];
-    }
-
-    private function displayContact(QuestionContact $contact, array $question): array
-    {
-        $answer = $contact->answer;
-        $values = is_array($answer['values'] ?? null) ? $answer['values'] : [];
-        $labels = [];
-
-        foreach ($question['options'] ?? [] as $option) {
-            if (in_array($option['value'], $values, true)) {
-                $labels[] = $option['label'];
-            }
-        }
-
-        $details = $contact->details;
-        $storedFields = collect(is_array($details['fields'] ?? null) ? $details['fields'] : [])
-            ->filter(fn ($field): bool => is_array($field) && is_string($field['key'] ?? null))
-            ->keyBy('key');
-        $fields = [];
-
-        foreach ($question['contact']['fields'] as $field) {
-            $stored = $storedFields->get($field['key']);
-            $value = $stored['value'] ?? null;
-            if (! is_string($value) || trim($value) === '') {
-                continue;
-            }
-
-            if ($field['type'] === 'role') {
-                $value = match ($value) {
-                    'mother' => 'Mamma',
-                    'father' => 'Tētis',
-                    'guardian' => 'Cits aizbildnis',
-                    default => null,
-                };
-            }
-
-            if ($value !== null) {
-                $fields[] = ['label' => $field['label'], 'value' => $value];
-            }
-        }
-
-        return ['id' => $contact->getKey(), 'answers' => $labels, 'fields' => $fields];
+        return [
+            'surveyTitle' => $survey->title,
+            'contacts' => app(QuestionContactReportService::class)->build($survey),
+            'hasContactQuestions' => collect($survey->reportQuestions())->contains(fn (array $question): bool => is_array($question['contact'] ?? null)),
+        ];
     }
 }

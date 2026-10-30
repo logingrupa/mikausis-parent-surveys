@@ -11,6 +11,7 @@
         <p class="respondent-disclosure">Jūsu norādītie dati būs redzami administrācijai kopā ar jūsu atbildēm, arī atskaites izdrukā un HTML eksportā.</p>
         @foreach ($respondentFields as $field)
             @php
+                $field['type'] = \App\Support\ContactField::type($field);
                 $fieldKey = $field['key'];
                 $fieldValue = $oldRespondent[$fieldKey] ?? ($fieldKey === 'name' ? ($oldValues['respondent_name'] ?? '') : ($fieldKey === 'role' ? ($oldValues['respondent_role'] ?? '') : ''));
                 $fieldValue = is_string($fieldValue) ? $fieldValue : '';

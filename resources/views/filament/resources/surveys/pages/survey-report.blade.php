@@ -33,7 +33,7 @@
             .mikausis-report-option-value { display: block; margin-top: .25rem; }
         }
         @media print {
-            .fi-sidebar, .fi-topbar, .fi-header, .fi-breadcrumbs, .mikausis-report-actions, .mikausis-report-export-note { display: none !important; }
+            .fi-sidebar, .fi-topbar, .fi-breadcrumbs, .mikausis-report-actions, .mikausis-report-export-note { display: none !important; }
             .fi-main { padding: 0 !important; max-width: none !important; }
             .mikausis-report { color: #000; gap: 1rem; }
             .mikausis-report-card { padding: 1rem; border-color: #ccc; border-radius: 0; box-shadow: none; }
@@ -67,14 +67,17 @@
                     <x-filament::button tag="a" :href="route('reports.html.download', ['survey' => $survey])" color="gray" icon="heroicon-m-arrow-down-tray">
                         Lejupielādēt HTML
                     </x-filament::button>
+                    <x-filament::button tag="a" :href="route('reports.html', ['survey' => $survey, 'print' => 1])" target="_blank" rel="noopener noreferrer" color="gray" icon="heroicon-m-printer">
+                        Drukāt atskaiti
+                    </x-filament::button>
                 @else
                     <x-filament::button disabled icon="heroicon-m-arrow-down-tray">
                         CSV vēl nav pieejams
                     </x-filament::button>
+                    <x-filament::button disabled color="gray" icon="heroicon-m-printer">
+                        Drukāt atskaiti
+                    </x-filament::button>
                 @endif
-                <x-filament::button type="button" color="gray" icon="heroicon-m-printer" x-on:click="window.print()">
-                    Drukāt atskaiti
-                </x-filament::button>
             </div>
             <p class="mikausis-report-note mikausis-report-export-note">CSV satur atbilžu variantu skaitu un procentus. Drukas skatā un HTML failā atbildes sakārtotas pa jautājumiem. Drukas logā atskaiti var saglabāt PDF formātā.</p>
 

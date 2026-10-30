@@ -4,6 +4,8 @@ namespace App\Services;
 
 use App\Models\QuestionContact;
 use App\Models\Survey;
+use App\Rules\ContactPhone;
+use App\Support\ContactField;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
@@ -46,7 +48,7 @@ class QuestionContactService
                 }
 
                 $answer = $this->normalizeAnswer($question, $payload['answer'] ?? null);
-                $details = $this->normalizeDetails($question['contact']['fields'] ?? null, $payload['fields'] ?? null);
+                $details = $this->normalizeDetails($question['contact']['fields'] ?? null, $payload['fields'] ?? null, $existing?->details);
                 if ($existing !== null) {
                     return $this->exactRetry($existing, $answer, $details);
                 }
@@ -151,7 +153,7 @@ class QuestionContactService
         return ['values' => $values, 'labels' => $selectedLabels];
     }
 
-    private function normalizeDetails(mixed $fields, mixed $raw): array
+    private function normalizeDetails(mixed $fields, mixed $raw, ?array $existingDetails = null): array
     {
         if (! is_array($fields) || ! array_is_list($fields) || $fields === [] || count($fields) > 12) {
             throw ValidationException::withMessages(['fields' => 'Šī jautājuma kontaktinformācijas lauki nav pieejami.']);
@@ -163,7 +165,8 @@ class QuestionContactService
         $values = [];
         $rules = [];
         $attributes = [];
-        foreach ($fields as $field) {
+        $storedTypes = array_column($existingDetails['fields'] ?? [], 'type', 'key');
+        foreach ($fields as $index => $field) {
             if (! is_array($field) || ! is_string($field['key'] ?? null) || ! is_string($field['label'] ?? null)
                 || ! preg_match('/^(?:name|role|email|phone|detail_[a-f0-9]{32}|detail_[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})$/', $field['key'])
                 || ! in_array($field['type'] ?? null, ['text', 'email', 'tel', 'role'], true)
@@ -171,6 +174,8 @@ class QuestionContactService
                 throw ValidationException::withMessages(['fields' => 'Šī jautājuma kontaktinformācijas lauki nav derīgi.']);
             }
             $key = $field['key'];
+            $field['type'] = $existingDetails !== null ? ($storedTypes[$key] ?? $field['type']) : ContactField::type($field);
+            $fields[$index] = $field;
             $path = 'fields.'.$key;
             $value = $raw[$key] ?? null;
             $value = is_string($value) ? Str::trim($value) : $value;
@@ -186,6 +191,8 @@ class QuestionContactService
                 };
                 if ($field['type'] === 'email') {
                     $rules[$path][] = 'email:rfc';
+                } elseif ($field['type'] === 'tel' && $existingDetails === null) {
+                    $rules[$path][] = new ContactPhone;
                 }
             }
             $attributes[$path] = $field['label'];

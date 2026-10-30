@@ -24,11 +24,15 @@
 @if (! $survey->isAcceptingResponses())
     <section class="message-panel"><span class="state-symbol" aria-hidden="true">✓</span><h1>Šī aptauja ir noslēgusies.</h1><p>Atbildes vairs netiek pieņemtas. Paldies par interesi un iesaistīšanos!</p><a class="button primary" href="{{ route('surveys.index') }}">Uz aptauju sākumlapu</a></section>
 @elseif ($familyComplete)
+    <span hidden data-completed-draft-scope="{{ $draftScope }}" data-contact-definition="{{ $survey->formDefinitionToken() }}"></span>
     <section class="message-panel"><span class="state-symbol" aria-hidden="true">✓</span><h1>Paldies jūsu ģimenei!</h1><p>Šajā ģimenes saitē visas pieejamās lomas jau ir iesniegušas atbildes. Jaunu anketu sākt vairs nav nepieciešams.</p><a class="button primary" href="{{ route('surveys.index') }}">Uz aptauju sākumlapu</a></section>
 @elseif ($submitted && ! $invitation)
-    <section class="message-panel"><span class="state-symbol" aria-hidden="true">✓</span><h1>Paldies, jūsu atbilde ir iesniegta.</h1><p>Šajā pārlūkā šī aptauja jau ir aizpildīta.</p><a class="button primary" href="{{ route('surveys.index') }}">Uz aptauju sākumlapu</a></section>
+    <span hidden data-completed-draft-scope="{{ $draftScope }}" data-contact-definition="{{ $survey->formDefinitionToken() }}"></span>
+    <section class="message-panel"><span class="state-symbol" aria-hidden="true">✓</span><h1>Paldies, jūsu atbilde ir iesniegta.</h1><p>Šajā pārlūkā šī aptauja jau ir aizpildīta.</p>
+    @include('surveys.partials.restart')
+    <a class="text-link" href="{{ route('surveys.index') }}">Uz aptauju sākumlapu</a></section>
 @else
-<form id="survey-form" action="{{ $invitation ? route('surveys.family.submit', ['slug' => $survey->slug, 'token' => request()->route('token')]) : route('surveys.submit', $survey->slug) }}" method="post" novalidate data-section-count="{{ count($sections) }}">
+<form id="survey-form" action="{{ $invitation ? route('surveys.family.submit', ['slug' => $survey->slug, 'token' => request()->route('token')]) : route('surveys.submit', $survey->slug) }}" method="post" novalidate data-section-count="{{ count($sections) }}" data-contact-scope="{{ $survey->slug }}" data-contact-definition="{{ $survey->formDefinitionToken() }}" data-session-url="{{ $invitation ? route('surveys.family.session', ['slug' => $survey->slug, 'token' => request()->route('token')]) : route('surveys.session', $survey->slug) }}" data-session-resume="{{ $submissionResumeToken }}" data-draft-scope="{{ $draftScope }}">
     @csrf
     <input type="hidden" name="submission_id" value="{{ $submissionId }}">
     <input type="hidden" name="form_definition" value="{{ $survey->formDefinitionToken() }}">
@@ -120,21 +124,7 @@
             <section class="review-section" data-step="{{ count($sections) }}" aria-labelledby="review-title">
                 <span class="section-label"><span class="orange-dot" aria-hidden="true"></span> Pēdējais solis</span><h2 id="review-title" tabindex="-1">Iesniegt atbildes</h2><p class="muted">Pirms iesniegšanas pārbaudiet savas izvēles. Atbildes vēl varat labot.</p><div id="review-answers"></div>
                 @if ($hasQuestionContacts)
-                    <section class="shared-contacts" data-shared-contacts hidden aria-labelledby="shared-contacts-title">
-                        <h3 id="shared-contacts-title" tabindex="-1">Kontaktinformācija aktivitātēm</h3>
-                        <p class="field-help" id="shared-contacts-help">Pēc noklusējuma atbildat anonīmi. Kontaktus varat atstāt pēc izvēles. Tie būs saistīti tikai ar zemāk norādīto aktivitāšu izvēlēm; pārējās aptaujas atbildes paliek anonīmas.</p>
-                        <label class="anonymous-choice" for="shared-contact-consent">
-                            <input id="shared-contact-consent" type="checkbox" data-shared-contact-consent aria-describedby="shared-contacts-help" aria-controls="shared-contact-details" disabled>
-                            <span id="shared-contact-prompt">Atstāt kontaktinformāciju</span>
-                        </label>
-                        <div id="shared-contact-details" data-shared-contact-details hidden>
-                            <p class="field-help" id="shared-contacts-purpose" data-shared-contact-purpose hidden></p>
-                            <p class="field-help" id="shared-contact-activities-label">Kontaktinformācija paredzēta šīm aktivitātēm:</p>
-                            <ul class="shared-contact-activities" data-shared-contact-activities aria-labelledby="shared-contact-activities-label"></ul>
-                            <div class="respondent-details" data-shared-contact-fields></div>
-                            <p class="field-help" data-shared-contact-status role="status" hidden></p>
-                        </div>
-                    </section>
+                    @include('surveys.partials.shared-contacts')
                 @endif
                 <p class="privacy-final" data-submission-note>@if ($respondentFields !== [])Ja atstājat atzīmi “Anonīmi”, atbilžu saturam nepievienojam jūsu identitāti. Ja noņemat atzīmi un norādāt savus datus, tie kopā ar atbildēm būs redzami administrācijai. @else Atbilžu saturam nepievienojam jūsu identitāti. @if ($hasQuestionContacts)Atbilstošo aktivitāšu kontaktinformāciju nosūtīsim atsevišķi un nepiesaistīsim pārējām atbildēm. @endif @endif Pēc iesniegšanas atbildes vairs nevarēsiet labot.</p><button class="button primary" type="submit" id="submit-button">Iesniegt atbildes <span aria-hidden="true">→</span></button><a class="text-link" data-skip-contacts hidden>Pabeigt bez kontaktu atkārtošanas</a>
             </section>
@@ -146,6 +136,11 @@
 @endif
 @endsection
 @push('scripts')
+<script src="{{ asset('js/survey-session.js') }}?v={{ filemtime(public_path('js/survey-session.js')) }}" defer></script>
+<script src="{{ asset('js/survey-draft-state.js') }}?v={{ filemtime(public_path('js/survey-draft-state.js')) }}" defer></script>
 <script src="{{ asset('js/shared-question-contacts.js') }}?v={{ filemtime(public_path('js/shared-question-contacts.js')) }}" defer></script>
+<script src="{{ asset('js/contact-followup-state.js') }}?v={{ filemtime(public_path('js/contact-followup-state.js')) }}" defer></script>
+<script src="{{ asset('js/contact-collector.js') }}?v={{ filemtime(public_path('js/contact-collector.js')) }}" defer></script>
 <script src="{{ asset('js/survey.js') }}?v={{ filemtime(public_path('js/survey.js')) }}" defer></script>
+<script src="{{ asset('js/survey-restart.js') }}?v={{ filemtime(public_path('js/survey-restart.js')) }}" defer></script>
 @endpush

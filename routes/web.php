@@ -15,6 +15,10 @@ Route::middleware(SurveyPrivacyHeaders::class)->group(function () {
     Route::get('/a/{slug}/kontakti/{question}', [QuestionContactController::class, 'show'])->name('question-contacts.show');
     // A survey can send up to 100 independent activity contacts after one main submission.
     Route::post('/a/{slug}/kontakti/{question}', [QuestionContactController::class, 'store'])->middleware('throttle:150,1,question-contacts:')->name('question-contacts.store');
+    Route::get('/a/{slug}/session', [SurveyController::class, 'session'])->name('surveys.session');
+    Route::get('/a/{slug}/g/{token}/session', [SurveyController::class, 'session'])->name('surveys.family.session');
+    Route::post('/a/{slug}/velreiz', [SurveyController::class, 'restart'])->name('surveys.restart');
+    Route::post('/a/{slug}/g/{token}/velreiz', [SurveyController::class, 'restart'])->name('surveys.family.restart');
     Route::get('/a/{slug}/g/{token}', [SurveyController::class, 'show'])->name('surveys.family');
     Route::post('/a/{slug}/g/{token}', [SurveyController::class, 'store'])->middleware('throttle:30,1')->name('surveys.family.submit');
     Route::get('/a/{slug}', [SurveyController::class, 'show'])->name('surveys.show');

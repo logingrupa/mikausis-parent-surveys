@@ -1,7 +1,18 @@
 (() => {
     "use strict";
     const form = document.querySelector("#survey-form");
-    if (!form) return;
+    if (!form) {
+        const completed = document.querySelector(
+            "[data-completed-draft-scope]",
+        );
+        if (completed)
+            globalThis.MikausisSurveyDraftState?.create({
+                scope: completed.dataset.completedDraftScope,
+                definition: completed.dataset.contactDefinition,
+                questions: [],
+            }).clear();
+        return;
+    }
     const steps = [...form.querySelectorAll("[data-step]")];
     const questions = [...form.querySelectorAll("[data-question]")];
     const sectionCount = Number(form.dataset.sectionCount);
@@ -24,6 +35,21 @@
     let sending = false;
     let answersSubmitted = false;
     let thanksRedirect = null;
+    let restoringDraft = true;
+    const session = globalThis.MikausisSurveySession?.forForm(form);
+    const draft = globalThis.MikausisSurveyDraftState?.create({
+        scope: form.dataset.draftScope,
+        definition: form.dataset.contactDefinition,
+        questions: questions.map((question) => ({
+            key: question.dataset.question,
+            type: question.dataset.type,
+            options: [
+                ...question.querySelectorAll(".answer-options input"),
+            ].map((input) => ({ value: input.value })),
+            allowOther: Boolean(question.querySelector("[data-other]")),
+        })),
+    });
+    const restoredDraft = draft?.read();
     const contactBlocks = [...form.querySelectorAll("[data-question-contact]")];
     const values = (question) =>
         [...question.querySelectorAll(".answer-options input:checked")].map(
@@ -35,234 +61,156 @@
             : values(question).length > 0;
     const visible = (question) => !question.hidden;
 
+    function saveDraft() {
+        if (!draft || restoringDraft || answersSubmitted) return;
+        const answers = Object.create(null);
+        const otherAnswers = Object.create(null);
+        for (const question of questions) {
+            const key = question.dataset.question;
+            if (question.dataset.type === "text") {
+                answers[key] = question.querySelector("textarea").value;
+            } else {
+                const selected = values(question);
+                answers[key] =
+                    question.dataset.type === "multiple"
+                        ? selected
+                        : selected[0] || "";
+            }
+            const other = question.querySelector("[data-other] textarea");
+            if (other) otherAnswers[key] = other.value;
+        }
+        draft.save({
+            answers,
+            otherAnswers,
+            step: current,
+            role:
+                form.querySelector('input[name="role"]:checked')?.value || null,
+            resumeToken: form.dataset.sessionResume || "",
+        });
+    }
+
+    function restoreDraft() {
+        if (!restoredDraft) return;
+        for (const question of questions) {
+            const key = question.dataset.question;
+            const answer = restoredDraft.answers[key];
+            if (question.dataset.type === "text") {
+                question.querySelector("textarea").value =
+                    typeof answer === "string" ? answer : "";
+            } else {
+                const selected = Array.isArray(answer) ? answer : [answer];
+                question
+                    .querySelectorAll(".answer-options input")
+                    .forEach((input) => {
+                        input.checked = selected.includes(input.value);
+                    });
+            }
+            const other = question.querySelector("[data-other] textarea");
+            if (other) other.value = restoredDraft.otherAnswers[key] || "";
+        }
+        form.querySelectorAll('input[name="role"]').forEach((input) => {
+            input.checked =
+                !input.disabled && input.value === restoredDraft.role;
+        });
+        if (restoredDraft.resumeToken)
+            form.dataset.sessionResume = restoredDraft.resumeToken;
+        if (anonymousControl) anonymousControl.checked = true;
+        dirty = true;
+    }
+
+    function renewSession() {
+        if (!session || sending || answersSubmitted) return;
+        session
+            .refresh()
+            .then(() => {
+                if (
+                    !session.redirect ||
+                    !restoredDraft ||
+                    sending ||
+                    answersSubmitted ||
+                    sharedContacts?.globalConsent
+                )
+                    return;
+                if (contactCache && !contactCache.entries().length)
+                    contactCache.capture(
+                        contactBlocks.map((block) => {
+                            const question = block.closest("[data-question]");
+                            return {
+                                key: question.dataset.question,
+                                values: values(question),
+                                visible: !question.hidden,
+                            };
+                        }),
+                    );
+                answersSubmitted = true;
+                draft?.clear();
+                dirty = false;
+                window.location.assign(session.redirect);
+            })
+            .catch(() => {});
+    }
+
     function contactFields(block) {
         return [...block.querySelectorAll("[data-contact-field]")];
     }
 
-    const sharedPanel = form.querySelector("[data-shared-contacts]");
-    const sharedConsent = sharedPanel?.querySelector(
-        "[data-shared-contact-consent]",
-    );
-    const sharedPrompt = sharedPanel?.querySelector("#shared-contact-prompt");
-    const sharedPurpose = sharedPanel?.querySelector(
-        "[data-shared-contact-purpose]",
-    );
-    const sharedDetails = sharedPanel?.querySelector(
-        "[data-shared-contact-details]",
-    );
-    const sharedActivities = sharedPanel?.querySelector(
-        "[data-shared-contact-activities]",
-    );
-    const sharedFields = sharedPanel?.querySelector(
-        "[data-shared-contact-fields]",
-    );
-    const sharedStatus = sharedPanel?.querySelector(
-        "[data-shared-contact-status]",
-    );
-    const sharedContacts =
-        sharedPanel && globalThis.MikausisSharedContacts
-            ? globalThis.MikausisSharedContacts.create(
-                  contactBlocks.map((block) => {
-                      const question = block.closest("[data-question]");
-                      return {
-                          key: question.dataset.question,
-                          title: question.dataset.title,
-                          prompt:
-                              block.dataset.contactPrompt ||
-                              block
-                                  .querySelector("[data-contact-consent]")
-                                  ?.closest("label")
-                                  ?.textContent.trim(),
-                          purpose:
-                              block.dataset.contactPurpose ||
-                              block
-                                  .querySelector('[id$="-purpose"]')
-                                  ?.textContent.trim(),
-                          triggerValues: JSON.parse(block.dataset.triggers),
-                          fields: contactFields(block).map((field) => ({
-                              key: field.dataset.contactField,
-                              label: field.dataset.contactLabel,
-                              type:
-                                  field.dataset.contactType ||
-                                  (field.tagName === "SELECT"
-                                      ? "role"
-                                      : field.type),
-                              required: field.dataset.required === "true",
-                              maxLength: field.maxLength,
-                          })),
-                      };
-                  }),
-              )
-            : null;
-    const activityNodes = new Map();
-    const fieldNodes = new Map();
-    const contactErrors = new Map();
-    let sharedFieldSequence = 0;
-
-    function renderSharedContacts() {
-        if (!sharedContacts) return;
-        const activities = sharedContacts
-            .activities()
-            .filter(
-                (activity) =>
-                    activity.active || activity.saved || activity.pending,
-            );
-        const busy = sending || sharedContacts.locked;
-        const commonPrompt =
-            activities.length &&
-            activities.every(
-                (activity) => activity.prompt === activities[0].prompt,
-            )
-                ? activities[0].prompt
-                : "";
-        const commonPurpose =
-            activities.length &&
-            activities.every(
-                (activity) => activity.purpose === activities[0].purpose,
-            )
-                ? activities[0].purpose
-                : "";
-        if (sharedPrompt)
-            sharedPrompt.textContent =
-                commonPrompt || "Atstāt kontaktinformāciju";
-        if (sharedPurpose) {
-            sharedPurpose.textContent = commonPurpose;
-            sharedPurpose.hidden = !commonPurpose;
-        }
-        sharedPanel.hidden = activities.length === 0;
-        sharedConsent.checked = sharedContacts.globalConsent;
-        sharedConsent.disabled =
-            busy || !activities.some((activity) => !activity.saved);
-        sharedDetails.hidden =
-            !sharedContacts.globalConsent &&
-            !activities.some((activity) => activity.saved || activity.pending);
-
-        const activeKeys = new Set(activities.map((activity) => activity.key));
-        for (const [key, node] of activityNodes) {
-            if (!activeKeys.has(key)) {
-                node.wrapper.remove();
-                activityNodes.delete(key);
-            }
-        }
-        for (const activity of activities) {
-            let node = activityNodes.get(activity.key);
-            if (!node) {
-                const wrapper = document.createElement("li");
-                wrapper.className = "shared-contact-activity";
-                wrapper.dataset.sharedContactActivity = activity.key;
-                const title = document.createElement("h4");
-                const prompt = document.createElement("p");
-                prompt.className = "field-help";
-                const purpose = document.createElement("p");
-                purpose.className = "field-help";
-                const status = document.createElement("p");
-                status.className = "field-help";
-                status.setAttribute("role", "status");
-                wrapper.append(title, prompt, purpose, status);
-                sharedActivities.append(wrapper);
-                node = { wrapper, title, prompt, purpose, status };
-                activityNodes.set(activity.key, node);
-            }
-            node.title.textContent = activity.title;
-            node.prompt.textContent = commonPrompt ? "" : activity.prompt;
-            node.prompt.hidden = !node.prompt.textContent;
-            node.purpose.textContent =
-                commonPurpose && sharedPurpose ? "" : activity.purpose;
-            node.purpose.hidden = !node.purpose.textContent;
-            node.status.textContent = activity.saved
-                ? "Kontaktinformācija šai aktivitātei ir saglabāta atsevišķi; to vairs nemainām."
-                : activity.uncertain
-                  ? "Saglabāšanas rezultāts vēl nav zināms. Atkārtoti nosūtīsim tieši tās pašas vērtības; labošana pagaidām ir apturēta."
-                  : contactErrors.get(activity.key) ||
-                    (activity.pending ? "Saglabājam kontaktinformāciju…" : "");
-            node.status.dataset.state = activity.saved
-                ? "saved"
-                : activity.pending
-                  ? "pending"
-                  : contactErrors.has(activity.key)
-                    ? "error"
-                    : "ready";
-            node.status.hidden = !node.status.textContent;
-        }
-
-        const fields = sharedContacts.fields();
-        const needed = new Set(fields.map((field) => field.id));
-        for (const [id, node] of fieldNodes) {
-            if (!needed.has(id)) {
-                node.input.value = "";
-                node.wrapper.remove();
-                fieldNodes.delete(id);
-            }
-        }
-        for (const field of fields) {
-            let node = fieldNodes.get(field.id);
-            if (!node) {
-                const wrapper = document.createElement("div");
-                wrapper.className = "respondent-field";
-                const label = document.createElement("label");
-                const input = document.createElement(
-                    field.type === "role" ? "select" : "input",
+    const contactDefinitions = contactBlocks.map((block) => {
+        const question = block.closest("[data-question]");
+        return {
+            key: question.dataset.question,
+            contactId: block.dataset.contactId,
+            endpoint: block.dataset.endpoint,
+            multiple: question.dataset.type === "multiple",
+            title: question.dataset.title,
+            prompt:
+                block.dataset.contactPrompt ||
+                block
+                    .querySelector("[data-contact-consent]")
+                    ?.closest("label")
+                    ?.textContent.trim(),
+            purpose:
+                block.dataset.contactPurpose ||
+                block.querySelector('[id$="-purpose"]')?.textContent.trim(),
+            triggerValues: JSON.parse(block.dataset.triggers),
+            fields: contactFields(block).map((field) => ({
+                key: field.dataset.contactField,
+                label: field.dataset.contactLabel,
+                type:
+                    field.dataset.contactType ||
+                    (field.tagName === "SELECT" ? "role" : field.type),
+                required: field.dataset.required === "true",
+                maxLength: field.maxLength,
+            })),
+        };
+    });
+    const contactCache = globalThis.MikausisContactFollowupState?.create({
+        scope: form.dataset.contactScope,
+        definition: form.dataset.contactDefinition,
+        definitions: contactDefinitions,
+    });
+    const collector = globalThis.MikausisContactCollector?.create({
+        form,
+        definitions: contactDefinitions,
+        isSending: () => sending,
+        onChange: synchronizeContactShadows,
+        onErrors: (messages) => showErrors({ contacts: messages }),
+        onFocus: focusSharedContacts,
+        onPrepared: (keys) => contactCache?.mark(keys, "uncertain"),
+        onSettled: (key, status) => {
+            contactCache?.mark([key], status);
+            if (status === "saved") {
+                const block = contactBlocks.find(
+                    (item) =>
+                        item.closest("[data-question]").dataset.question ===
+                        key,
                 );
-                input.id = "shared-contact-field-" + ++sharedFieldSequence;
-                input.dataset.sharedContactInput = field.id;
-                label.htmlFor = input.id;
-                if (field.type === "role") {
-                    for (const [value, text] of Object.entries({
-                        "": "Izvēlieties lomu",
-                        ...roleLabels,
-                    })) {
-                        const option = document.createElement("option");
-                        option.value = value;
-                        option.textContent = text;
-                        input.append(option);
-                    }
-                } else input.type = field.type;
-                input.setAttribute("aria-describedby", "shared-contacts-help");
-                const read = () => {
-                    if (sending || sharedContacts.locked) {
-                        renderSharedContacts();
-                        return;
-                    }
-                    sharedContacts.setValue(field.id, input.value);
-                    input.removeAttribute("aria-invalid");
-                    synchronizeContactShadows();
-                };
-                input.addEventListener("input", read);
-                input.addEventListener("change", read);
-                wrapper.append(label, input);
-                sharedFields.append(wrapper);
-                node = { wrapper, label, input };
-                fieldNodes.set(field.id, node);
+                if (block) block.dataset.saved = "true";
             }
-            node.label.textContent = field.displayLabel || field.label;
-            if (field.required) {
-                const required = document.createElement("span");
-                required.className = "required-label";
-                required.textContent =
-                    " Obligāti, ja atstājat kontaktinformāciju";
-                node.label.append(required);
-            }
-            node.input.required = field.required;
-            node.input.disabled = busy;
-            if (field.maxLength !== null)
-                node.input.maxLength = field.maxLength;
-            if (node.input.value !== field.value)
-                node.input.value = field.value;
-        }
-        const saved = activities.filter((activity) => activity.saved).length;
-        const pending = activities.filter(
-            (activity) => activity.pending,
-        ).length;
-        sharedStatus.textContent = pending
-            ? "Kamēr pārbaudām kontaktu saglabāšanu, kontaktinformācijas labošana ir apturēta. Varat atkārtot nosūtīšanu vai turpināt bez atlikušajiem kontaktiem."
-            : saved
-              ? "Saglabāto aktivitāšu skaits: " +
-                saved +
-                ". Turpmāki labojumi attiecas tikai uz vēl nesaglabātajām aktivitātēm."
-              : "";
-        sharedStatus.hidden = !sharedStatus.textContent;
-    }
-
+        },
+    });
+    const sharedContacts = collector?.state;
+    const renderSharedContacts = () => collector?.render();
+    const validateSharedContacts = () => collector?.validate() !== false;
     function synchronizeContactShadows() {
         const activities = new Map(
             (sharedContacts?.activities() || []).map((item) => [
@@ -318,131 +266,17 @@
         renderSharedContacts();
     }
 
-    sharedConsent?.addEventListener("change", () => {
-        if (sending || sharedContacts?.locked) {
-            renderSharedContacts();
-            return;
-        }
-        sharedContacts?.setGlobalConsent(sharedConsent.checked);
-        contactErrors.clear();
-        updateQuestionContacts();
-    });
-
     function focusSharedContacts() {
         goTo(sectionCount, false);
-        const target =
-            sharedFields?.querySelector(
-                '[aria-invalid="true"]:not(:disabled)',
-            ) ||
-            sharedFields?.querySelector(
-                "input:not(:disabled),select:not(:disabled)",
-            ) ||
-            sharedConsent;
-        target?.focus();
-        sharedPanel?.scrollIntoView({ block: "start" });
-    }
-
-    function validateSharedContacts() {
-        if (!sharedContacts || sharedContacts.locked) return true;
-        const errors = sharedContacts.validate();
-        const nativeInvalid = [...fieldNodes.values()].find(
-            ({ input }) => !input.disabled && !input.checkValidity(),
-        );
-        if (!errors.length && !nativeInvalid) return true;
-        const messages = [];
-        for (const error of errors) {
-            const node = fieldNodes.get(error.fieldId);
-            node?.input.setAttribute("aria-invalid", "true");
-            const field = sharedContacts
-                .fields()
-                .find((item) => item.id === error.fieldId);
-            messages.push(
-                error.code === "empty"
-                    ? "Katrai norādītajai aktivitātei aizpildiet vismaz vienu kontaktinformācijas lauku vai noņemiet kontaktinformācijas atstāšanas atzīmi."
-                    : "Pārbaudiet kontaktinformācijas lauku “" +
-                          (field?.displayLabel || field?.label || "") +
-                          "”.",
-            );
-        }
-        if (nativeInvalid) {
-            nativeInvalid.input.setAttribute("aria-invalid", "true");
-            if (!messages.length)
-                messages.push("Pārbaudiet kontaktinformāciju.");
-        }
-        showErrors({ contacts: [...new Set(messages)] });
-        focusSharedContacts();
-        return false;
+        collector?.focus();
     }
 
     async function saveQuestionContacts() {
-        if (!validateSharedContacts()) return false;
-        const errors = [];
-        // Snapshot every independent request before the first asynchronous operation.
-        const requests = contactBlocks
-            .map((block) => {
-                const question = block.closest("[data-question]");
-                const key = question.dataset.question;
-                const payload = sharedContacts?.prepare(key, {
-                    contactId: block.dataset.contactId,
-                    multiple: question.dataset.type === "multiple",
-                });
-                return { block, key, payload };
-            })
-            .filter(({ payload }) => payload);
-        updateQuestionContacts();
-        for (const { block, key, payload } of requests) {
-            contactErrors.delete(key);
-            let safelyRejected = false;
-            try {
-                const response = await fetch(block.dataset.endpoint, {
-                    method: "POST",
-                    credentials: "same-origin",
-                    headers: {
-                        Accept: "application/json",
-                        "Content-Type": "application/json",
-                        "X-CSRF-TOKEN":
-                            form.querySelector('[name="_token"]').value,
-                    },
-                    body: JSON.stringify(payload),
-                });
-                safelyRejected = [419, 429].includes(response.status);
-                if (response.status === 419)
-                    throw new Error(
-                        "Sesija ir beigusies. Kontaktus varēsiet atstāt atsevišķajā aktivitātes lapā.",
-                    );
-                if (response.status === 429)
-                    throw new Error(
-                        "Pārāk daudz pieprasījumu. Nogaidiet minūti un mēģiniet vēlreiz.",
-                    );
-                const result = await response.json();
-                safelyRejected =
-                    response.status === 422 &&
-                    !Object.hasOwn(result.errors || {}, "contact_id");
-                if (!response.ok || result.saved !== true) {
-                    const messages = Object.values(result.errors || {})
-                        .flat()
-                        .filter((message) => typeof message === "string");
-                    throw new Error(
-                        messages.join(" ") ||
-                            "Kontaktinformāciju neizdevās saglabāt. Mēģiniet vēlreiz.",
-                    );
-                }
-                sharedContacts.settle(key, "saved");
-                block.dataset.saved = "true";
-            } catch (error) {
-                const unlocked =
-                    safelyRejected && sharedContacts.settle(key, "rejected");
-                if (!unlocked) sharedContacts.settle(key, "ambiguous");
-                const message =
-                    error instanceof TypeError || error instanceof SyntaxError
-                        ? "Kontaktinformāciju neizdevās nosūtīt. Pārbaudiet savienojumu un mēģiniet vēlreiz."
-                        : error.message;
-                contactErrors.set(key, message);
-                errors.push(message);
-            }
-            updateQuestionContacts();
-        }
-        if (errors.length) {
+        const result = await collector?.save();
+        if (!result?.ok) {
+            const errors = result?.errors || [];
+            if (!errors.length) return false;
+
             showErrors({ contacts: [...new Set(errors)] });
             goTo(sectionCount, false);
             errorBox.querySelector("strong").textContent =
@@ -710,6 +544,8 @@
                     : "smooth",
             });
         }
+        saveDraft();
+        renewSession();
     }
 
     function showErrors(errors) {
@@ -870,6 +706,7 @@
             });
             dirty = true;
             updateConditionalQuestions();
+            saveDraft();
         }),
     );
     form.addEventListener("change", (event) => {
@@ -897,9 +734,11 @@
                 });
         }
         updateConditionalQuestions();
+        if (question || event.target.name === "role") saveDraft();
     });
-    form.addEventListener("input", () => {
+    form.addEventListener("input", (event) => {
         dirty = true;
+        if (event.target.closest("[data-question]")) saveDraft();
     });
     form.querySelector("[data-skip-contacts]")?.addEventListener(
         "click",
@@ -908,11 +747,25 @@
         },
     );
     window.addEventListener("beforeunload", (event) => {
+        saveDraft();
         if (dirty && !sending) {
             event.preventDefault();
             event.returnValue = "";
         }
     });
+    window.addEventListener("pagehide", saveDraft);
+    window.addEventListener("pageshow", renewSession);
+    document.addEventListener("visibilitychange", () => {
+        if (document.visibilityState === "visible") renewSession();
+    });
+    if (session && typeof window.setInterval === "function")
+        window.setInterval(
+            () => {
+                draft?.read();
+                if (document.visibilityState === "visible") renewSession();
+            },
+            4 * 60 * 1000,
+        );
     form.addEventListener("submit", async (event) => {
         event.preventDefault();
         if (sending) return;
@@ -955,6 +808,7 @@
             return;
         }
         if (!validateSharedContacts()) return;
+        saveDraft();
         errorBox.hidden = true;
         form.querySelectorAll("[aria-invalid]").forEach((input) =>
             input.removeAttribute("aria-invalid"),
@@ -977,7 +831,10 @@
             input.disabled = true;
         });
         try {
-            const response = await fetch(form.action, {
+            const send = session
+                ? session.request
+                : (...args) => fetch(...args);
+            const response = await send(form.action, {
                 method: "POST",
                 headers: {
                     Accept: "application/json",
@@ -988,7 +845,7 @@
             });
             if (response.status === 419)
                 throw new Error(
-                    "Sesija ir beigusies. Atveriet aptauju no jauna un mēģiniet vēlreiz.",
+                    "Atbildes neizdevās iesniegt. Lūdzu, mēģiniet vēlreiz.",
                 );
             if (response.status === 429)
                 throw new Error(
@@ -1005,6 +862,17 @@
                 );
             thanksRedirect = result.redirect;
             answersSubmitted = true;
+            draft?.clear();
+            contactCache?.capture(
+                contactBlocks.map((block) => {
+                    const question = block.closest("[data-question]");
+                    return {
+                        key: question.dataset.question,
+                        values: values(question),
+                        visible: !question.hidden,
+                    };
+                }),
+            );
             // Contact inputs deliberately have no name: they never enter FormData above.
             form.querySelectorAll(
                 "input[name],textarea[name],select[name],[data-clear]",
@@ -1037,9 +905,11 @@
     form.classList.add("js-enhanced");
     form.noValidate = true;
     form.querySelector(".mobile-progress").hidden = false;
+    restoreDraft();
     updateConditionalQuestions();
     updateRespondentDetails();
-    goTo(-1, false);
+    goTo(restoredDraft?.step ?? -1, false);
+    restoringDraft = false;
     if (!errorBox.hidden) {
         const invalidQuestion = form
             .querySelector('[aria-invalid="true"]')

@@ -45,6 +45,7 @@ class ReportHtmlController extends Controller
         $response = response()->view('reports.html', [
             'survey' => $survey,
             'report' => $report,
+            'autoPrint' => ! $download && $request->query('print') === '1',
             'logo' => $this->embeddedAsset('images/mikausis.svg', 'image/svg+xml'),
             'fontLatin' => $this->embeddedAsset('fonts/montserrat-latin.woff2', 'font/woff2'),
             'fontLatinExt' => $this->embeddedAsset('fonts/montserrat-latin-ext.woff2', 'font/woff2'),

@@ -348,7 +348,7 @@ for (const [name, changed] of [
     ["trigger scope", definition("a", [field()], { triggerValues: ["yes"] })],
     ["field key", definition("a", [field("new_email")])],
     ["field label", definition("a", [field("email", "Other e-mail")])],
-    ["field type", definition("a", [field("email", "E-pasts", "text")])],
+    ["field type", definition("a", [field("custom_email", "E-pasts", "text")])],
     [
         "required field",
         definition("a", [
@@ -368,7 +368,13 @@ for (const [name, changed] of [
             name +
             " requires fresh global consent",
         () => {
-            const state = opted();
+            const state =
+                name === "field type"
+                    ? opted([
+                          definition("a", [field("custom_email")]),
+                          definition("b"),
+                      ])
+                    : opted();
             fill(state);
             state.syncDefinitions([
                 ...(changed ? [changed] : []),
@@ -547,4 +553,63 @@ test("same-label fields of different types get localized display hints without c
         undefined,
         "No hint when only one type remains",
     );
+});
+
+test("built-in field keys keep canonical types without mutating the input definitions", () => {
+    const fields = [
+        field("name", "Vārds", "email"),
+        field("email", "E-pasts", "text"),
+        field("phone", "Tālrunis", "text"),
+        field("role", "Loma", "tel"),
+    ];
+    const state = opted([definition("a", fields)]);
+    assert.deepEqual(
+        state.fields().map(({ type }) => type),
+        ["text", "email", "tel", "role"],
+    );
+    assert.deepEqual(
+        fields.map(({ type }) => type),
+        ["email", "text", "text", "tel"],
+    );
+});
+
+test("phone validation accepts Latvian local and international numbers with ASCII separators", () => {
+    const state = opted([
+        definition("a", [field("phone", "Tālrunis", "text")]),
+    ]);
+    for (const value of [
+        "20000000",
+        "60000000",
+        "+371 20000000",
+        "00371 (6000)-0000",
+        "+44 20 7946 0958",
+        "00442079460958",
+        "+1234567",
+        "+123456789012345",
+    ]) {
+        fill(state, value);
+        assert.deepEqual(state.validate(), [], value);
+    }
+    for (const value of [
+        "80000000",
+        "37120000000",
+        "+37180000000",
+        "0037180000000",
+        "++37120000000",
+        "+371+20000000",
+        "+0000000",
+        "+123456",
+        "+1234567890123456",
+        "+371.20000000",
+        "+371\t20000000",
+        "+371\n20000000",
+        "+371\u00a020000000",
+        "not-a-phone",
+    ]) {
+        fill(state, value);
+        assert.ok(
+            state.validate().some(({ code }) => code === "phone"),
+            value,
+        );
+    }
 });

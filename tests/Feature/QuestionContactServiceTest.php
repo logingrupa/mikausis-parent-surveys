@@ -230,7 +230,7 @@ class QuestionContactServiceTest extends SurveyTestCase
         $this->assertContactRejected($survey, $this->contactPayload(['fields' => ['phone' => ' ', 'role' => null, 'unconfigured' => 'private']]), 'fields');
         $this->assertContactRejected($survey, $this->contactPayload(['fields' => ['phone' => str_repeat('1', 41)]]), 'fields.phone');
         $this->assertContactRejected($survey, $this->contactPayload(['fields' => ['role' => 'child']]), 'fields.role');
-        $contact = app(QuestionContactService::class)->submit($survey, 'q1', $this->contactPayload(['fields' => ['phone' => '+371 12345678']]));
+        $contact = app(QuestionContactService::class)->submit($survey, 'q1', $this->contactPayload(['fields' => ['phone' => '+371 20000000']]));
         $this->assertCount(1, $contact->details['fields']);
     }
 
