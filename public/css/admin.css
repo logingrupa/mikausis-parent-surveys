@@ -53,6 +53,72 @@
 .fi-body.survey-management-page .fi-header-actions-ctn .fi-btn {
     min-height: 44px;
 }
+.fi-body .fi-resource-list-records-page .fi-header {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+}
+.fi-body .survey-directory-table .fi-ta-header-toolbar > .fi-ta-actions:not(:has(*)) {
+    display: none;
+}
+.fi-body .survey-directory-table .fi-ta-header-toolbar > div:not(.fi-ta-actions) {
+    flex: 1 1 auto;
+    margin-inline-start: 0;
+}
+.fi-body .survey-directory-table .fi-ta-search-field {
+    flex: 1 1 auto;
+}
+.fi-body .survey-directory-table .fi-ta-search-field .fi-input-wrp {
+    max-width: 24rem;
+}
+.fi-body .survey-directory-table .fi-ta-filters-dropdown {
+    margin-inline-start: auto;
+}
+.fi-body .survey-directory-table .fi-ta-filters-dropdown .fi-icon-btn {
+    margin: 0;
+}
+/* With records, the filter sits in the sorting row; the search keeps the toolbar row to itself. */
+.fi-body .survey-directory-table .fi-ta-main:has(.fi-ta-content-header) {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: "search" "indicators" "content" "footer";
+}
+.fi-body .survey-directory-table .fi-ta-main:has(.fi-ta-content-header) :is(.fi-ta-header-ctn, .fi-ta-header-toolbar, .fi-ta-header-toolbar > div:not(.fi-ta-actions)) {
+    display: contents;
+}
+.fi-body .survey-directory-table .fi-ta-main:has(.fi-ta-content-header) .fi-ta-search-field {
+    grid-area: search;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--gray-200);
+}
+.fi-body .survey-directory-table .fi-ta-main:has(.fi-ta-content-header) > .fi-ta-filter-indicators {
+    grid-area: indicators;
+}
+.fi-body .survey-directory-table .fi-ta-main:has(.fi-ta-content-header) > .fi-ta-content-ctn {
+    grid-area: content;
+}
+.fi-body .survey-directory-table .fi-ta-main:has(.fi-ta-content-header) > .fi-pagination {
+    grid-area: footer;
+}
+.fi-body .survey-directory-table .fi-ta-main:has(.fi-ta-content-header) .fi-ta-filters-dropdown {
+    grid-area: content;
+    justify-self: end;
+    align-self: start;
+    z-index: 1;
+    margin-block-start: 12px;
+    margin-inline-end: 16px;
+}
+.fi-body .survey-directory-table .fi-ta-content-header {
+    padding-inline-end: 68px;
+}
+.fi-body .survey-directory-table .fi-ta-sorting-settings {
+    flex-wrap: wrap;
+    row-gap: 8px;
+}
+.fi-body .survey-directory-table .fi-ta-sorting-settings > label {
+    flex: none;
+}
 .fi-body .survey-directory-table .fi-ta-record {
     padding: 0;
 }
@@ -219,6 +285,17 @@
 }
 .fi-body .fi-fo-repeater-item-header {
     background: #f7f7fb;
+}
+@media (min-width: 40rem) {
+    .fi-body .survey-directory-table .fi-ta-main:has(.fi-ta-content-header) .fi-ta-search-field {
+        padding-inline: 24px;
+    }
+    .fi-body .survey-directory-table .fi-ta-main:has(.fi-ta-content-header) .fi-ta-filters-dropdown {
+        margin-inline-end: 24px;
+    }
+    .fi-body .survey-directory-table .fi-ta-content-header {
+        padding-inline-end: 76px;
+    }
 }
 @media (max-width: 640px) {
     .fi-body .survey-directory-table .fi-ta-record .fi-ta-actions {
