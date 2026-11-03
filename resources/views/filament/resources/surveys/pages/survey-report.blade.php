@@ -58,24 +58,21 @@
                     </x-filament::button>
                 @endif
                 @if (! $report['suppressed'])
-                    <x-filament::button tag="a" :href="route('reports.export', ['survey' => $survey])" icon="heroicon-m-arrow-down-tray">
+                    <x-filament::button tag="a" :href="route('reports.html', ['survey' => $survey, 'print' => 1])" :spa-mode="false" icon="heroicon-m-printer">
+                        Drukāt / saglabāt PDF
+                    </x-filament::button>
+                    <x-filament::button tag="a" :href="route('reports.export', ['survey' => $survey])" :spa-mode="false" color="gray" icon="heroicon-m-arrow-down-tray">
                         Lejupielādēt CSV
                     </x-filament::button>
-                    <x-filament::button tag="a" :href="route('reports.html', ['survey' => $survey])" target="_blank" rel="noopener noreferrer" color="gray" icon="heroicon-m-document-text">
-                        Atvērt drukas skatu
-                    </x-filament::button>
-                    <x-filament::button tag="a" :href="route('reports.html.download', ['survey' => $survey])" color="gray" icon="heroicon-m-arrow-down-tray">
+                    <x-filament::button tag="a" :href="route('reports.html.download', ['survey' => $survey])" :spa-mode="false" color="gray" icon="heroicon-m-arrow-down-tray">
                         Lejupielādēt HTML
                     </x-filament::button>
-                    <x-filament::button tag="a" :href="route('reports.html', ['survey' => $survey, 'print' => 1])" target="_blank" rel="noopener noreferrer" color="gray" icon="heroicon-m-printer">
-                        Drukāt atskaiti
-                    </x-filament::button>
                 @else
-                    <x-filament::button disabled icon="heroicon-m-arrow-down-tray">
-                        CSV vēl nav pieejams
+                    <x-filament::button disabled icon="heroicon-m-printer">
+                        Drukāt / saglabāt PDF
                     </x-filament::button>
-                    <x-filament::button disabled color="gray" icon="heroicon-m-printer">
-                        Drukāt atskaiti
+                    <x-filament::button disabled color="gray" icon="heroicon-m-arrow-down-tray">
+                        CSV vēl nav pieejams
                     </x-filament::button>
                 @endif
             </div>

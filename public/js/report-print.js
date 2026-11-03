@@ -1,4 +1,13 @@
 (() => {
+    let printed = false;
+    window.addEventListener(
+        "beforeprint",
+        () => {
+            printed = true;
+        },
+        { once: true },
+    );
+
     async function printReport() {
         if (document.readyState !== "complete") {
             await new Promise((resolve) =>
@@ -10,13 +19,9 @@
         await Promise.allSettled(
             Array.from(document.images, (image) => image.decode?.()),
         );
-        await new Promise((resolve) =>
-            window.requestAnimationFrame(() =>
-                window.requestAnimationFrame(resolve),
-            ),
-        );
-
-        window.print();
+        if (!printed) {
+            window.print();
+        }
     }
 
     void printReport();

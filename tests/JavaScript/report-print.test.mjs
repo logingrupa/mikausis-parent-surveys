@@ -19,18 +19,19 @@ function deferred() {
 
 function report(document) {
     const window = new EventTarget();
-    const frames = [];
     let prints = 0;
-    window.requestAnimationFrame = (callback) => frames.push(callback);
+    window.requestAnimationFrame = () => {
+        throw new Error("Printing must not depend on animation frames");
+    };
     window.print = () => {
         prints++;
     };
     runInNewContext(source, { document, window });
 
-    return { window, frames, prints: () => prints };
+    return { window, prints: () => prints };
 }
 
-test("automatic print waits for load, fonts, all image decodes, and two frames", async () => {
+test("automatic print waits for load, fonts and image decodes without animation frames", async () => {
     const fonts = deferred();
     const logo = deferred();
     const other = deferred();
@@ -49,7 +50,6 @@ test("automatic print waits for load, fonts, all image decodes, and two frames",
     await setImmediate();
     assert.equal(page.prints(), 0);
     assert.deepEqual(decoded, []);
-    assert.equal(page.frames.length, 0);
 
     document.readyState = "complete";
     page.window.dispatchEvent(new Event("load"));
@@ -60,29 +60,19 @@ test("automatic print waits for load, fonts, all image decodes, and two frames",
     fonts.resolve();
     await setImmediate();
     assert.deepEqual(decoded, [0, 1]);
-    assert.equal(page.frames.length, 0);
     assert.equal(page.prints(), 0);
 
     logo.resolve();
     await setImmediate();
-    assert.equal(page.frames.length, 0);
     assert.equal(page.prints(), 0);
 
     other.resolve();
-    await setImmediate();
-    assert.equal(page.frames.length, 1);
-    assert.equal(page.prints(), 0);
-    page.frames.shift()();
-    assert.equal(page.frames.length, 1);
-    assert.equal(page.prints(), 0);
-    page.frames.shift()();
     await setImmediate();
     assert.equal(page.prints(), 1);
 
     page.window.dispatchEvent(new Event("load"));
     await setImmediate();
     assert.equal(page.prints(), 1);
-    assert.equal(page.frames.length, 0);
 });
 
 test("an already loaded report prints despite a failed decode or missing asset APIs", async () => {
@@ -95,12 +85,19 @@ test("an already loaded report prints despite a failed decode or missing asset A
     });
 
     await setImmediate();
-    assert.equal(page.frames.length, 1);
-    assert.equal(page.prints(), 0);
-    page.frames.shift()();
-    assert.equal(page.prints(), 0);
-    page.frames.shift()();
-    await setImmediate();
     assert.equal(page.prints(), 1);
-    assert.equal(page.frames.length, 0);
+});
+
+test("manual print while assets load cancels the later automatic dialog", async () => {
+    const fonts = deferred();
+    const page = report({
+        readyState: "complete",
+        fonts: { ready: fonts.promise },
+        images: [],
+    });
+
+    page.window.dispatchEvent(new Event("beforeprint"));
+    fonts.resolve();
+    await setImmediate();
+    assert.equal(page.prints(), 0);
 });

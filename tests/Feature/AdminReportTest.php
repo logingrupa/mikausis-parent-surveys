@@ -122,7 +122,7 @@ class AdminReportTest extends TestCase
             ->assertDontSee(route('reports.html', $survey), false)
             ->assertDontSee(route('reports.html.download', $survey), false);
 
-        $button = $this->reportAction($response->getContent(), 'Drukāt atskaiti');
+        $button = $this->reportAction($response->getContent(), 'Drukāt / saglabāt PDF');
         $this->assertSame('button', $button->tagName);
         $this->assertTrue($button->hasAttribute('disabled'));
         $this->assertFalse($button->hasAttribute('href'));
@@ -172,7 +172,7 @@ class AdminReportTest extends TestCase
             ->assertDontSee('window.print()', false);
     }
 
-    public function test_print_action_opens_the_standalone_report_with_an_explicit_print_flag(): void
+    public function test_print_action_navigates_to_the_standalone_report_without_a_popup_or_spa(): void
     {
         $school = $this->school();
         $survey = $this->survey($school);
@@ -183,20 +183,18 @@ class AdminReportTest extends TestCase
             ->assertDontSee('window.print()', false);
         $html = $response->getContent();
         foreach ([
-            'Drukāt atskaiti' => route('reports.html', ['survey' => $survey, 'print' => 1]),
-            'Atvērt drukas skatu' => route('reports.html', $survey),
+            'Drukāt / saglabāt PDF' => route('reports.html', ['survey' => $survey, 'print' => 1]),
+            'Lejupielādēt CSV' => route('reports.export', $survey),
             'Lejupielādēt HTML' => route('reports.html.download', $survey),
         ] as $label => $url) {
             $link = $this->reportAction($html, $label);
             $this->assertSame('a', $link->tagName);
             $this->assertSame($url, $link->getAttribute('href'));
             $this->assertFalse($link->hasAttribute('x-on:click'));
-            if ($label !== 'Lejupielādēt HTML') {
-                $this->assertSame('_blank', $link->getAttribute('target'));
-                $this->assertContains('noopener', explode(' ', $link->getAttribute('rel')));
-                $this->assertContains('noreferrer', explode(' ', $link->getAttribute('rel')));
-            }
+            $this->assertFalse($link->hasAttribute('target'));
+            $this->assertFalse($link->hasAttribute('wire:navigate'));
         }
+        $response->assertDontSee('Atvērt drukas skatu')->assertDontSee('Drukāt atskaiti');
         $this->assertDoesNotMatchRegularExpression('/\.fi-header\b[^{}]*\{[^}]*display\s*:\s*none/i', $html);
     }
 
