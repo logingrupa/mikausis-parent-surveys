@@ -12,4 +12,4 @@ Validation: 79 PHP tests with 1,358 assertions using SQLite :memory:, three Node
 
 The isolated browser verifier clicked the actual export link and confirmed same-tab navigation and one print invocation after content loaded. Manual print remained available. The generated PDF has five populated A4 pages and all five synthetic typed answers. Independent contact details are absent. CSV and HTML downloads, authentication and the four-response restriction passed. Screenshots were inspected at 390x844 light/dark and 1440x1000. The native operating-system print dialog was not inspected; the call was intercepted and Chromium PDF output was checked.
 
-Evidence: artifacts/a4-export-qa-20261103-evidence.json and artifacts/a4-export-qa-20261103-pdf-evidence.json. No production deployment in this task.
+Evidence: artifacts/a4-export-qa-20261103-evidence.json and artifacts/a4-export-qa-20261103-pdf-evidence.json. The owner subsequently approved deployment. Release scope and checks are recorded in PLAN.md; deployment receipts use artifacts/a4-export-20261103-production-*.
